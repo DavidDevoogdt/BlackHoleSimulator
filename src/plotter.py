@@ -25,9 +25,11 @@ plt.xlim(-5 ,5)
 plt.ylim(-5,10)
 
 for i in range(0,N):
-    db = pd.read_csv( 'files/photon%d.csv'%i)  
+    #db = pd.read_csv( 'files/photon%d.csv'%i, names=['t','r','p','h','pt','pr','pp','ph'])  
+    db = pd.read_csv( 'files/photon%d.csv'%i, names=['t','x','y','z','pt','px','py','pz'])   
     print(db)
-    plt.plot( db['r']*np.sin(db['h'])*np.cos(db['p']),db['r']*np.cos(db['h'])  )
+    plt.plot( db['x'],db['z']  )
+    #plt.plot( db['r']*np.sin(db['h'])*np.cos(db['p']),db['r']*np.cos(db['h']))
 
 
 plt.show()

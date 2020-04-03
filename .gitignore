@@ -17,3 +17,5 @@ Cargo.lock
 # End of https://www.gitignore.io/api/rust
 
 /files/*
+.vscode/launch.json
+.vscode/tasks.json

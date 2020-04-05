@@ -32,7 +32,7 @@ pub trait SpaceObject<'a>{
     fn get_mut_coordinates(&mut self) -> &mut [f64;4];
     fn get_mut_momenta(&mut self) -> &mut [f64;4];
 
-
+    fn get_cartesian_coordinates_and_momenta(&self) -> [f64;8];
     // copy paste these implementations in the corresponding section 
     // reason: size of Self of metric is unknown for generic implementation due to associated type
 
@@ -256,11 +256,7 @@ impl<'a> SpaceObject<'a> for SchwarzschildObject<'a>{
         self.metric.covariant_derivative(index, coor,vec )
     }
 
-
-}
-
-impl<'a> SchwarzschildObject<'a>{
-    pub fn get_cartesian_coordinates_and_momenta(&self) -> [f64;8] {
+    fn get_cartesian_coordinates_and_momenta(&self) -> [f64;8] {
         let coor = self.get_coordinates();
         let mom = self.get_momenta(); 
     

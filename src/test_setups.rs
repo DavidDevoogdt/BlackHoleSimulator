@@ -51,7 +51,7 @@ pub fn launch_parallel_photons(){
         results.push(v);
     }
 
-    python_interface::launch_python(num_photons); 
+    python_interface::launch_python(num_photons, "xz" ); 
 }
 
 //////////////////
@@ -62,17 +62,22 @@ pub fn ray_trace(){
     let camera = ray_tracer::Camera{ 
         pos : [0.0, -5.0,0.0,0.0],
         direction : [1.0,1.0,0.0,0.0],
-        x_res : 8,
-        y_res : 8,
-        distance: 0.5,
-        height : 0.5,
-        width : 0.5, };
+        x_res : 1920,
+        y_res : 1080,
+        distance: 0.2,
+        height : 0.3,
+        width : 0.3, };
+
     let col_objects : Vec< ray_tracer::CollsionObject > = vec![];
 
-    let mut ray_tracer = ray_tracer::new( camera, col_objects,  &metric);
+    let mut ray_tracer = ray_tracer::new( camera, col_objects,  &metric, false);
 
-    for _ in 0..10 {
+    for i in 0..1000 {
         ray_tracer.take_step();
+        println!("step {}",i)
     }
+
+    //ray_tracer.plot_paths();
+
 }
 

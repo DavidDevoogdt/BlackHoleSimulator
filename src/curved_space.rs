@@ -102,8 +102,8 @@ pub trait SpaceObject<'a>{
 }
 
 
-pub trait Metric<'a> {
-    type SpecificSpaceObject : SpaceObject<'a> ;
+pub trait Metric<'a> : std::marker::Sync + std::marker::Send {
+    type SpecificSpaceObject : SpaceObject<'a> + std::marker::Sync + std::marker::Send ;
 
     fn get_christoffel (&self,x0: i8,x1: i8,x2: i8,coor: &[f64;4]) -> f64;
     fn g_lower(&self, x0 :i8, x1 :i8,coor :&[f64;4]) -> f64;
@@ -152,7 +152,7 @@ impl<'a> Metric<'a> for SchwarzschildMetric {
     }
 
     fn to_contra(&self, coordinates : &[f64;4] ,vec: &[f64;4]) -> [f64;4]{
-        [ self.g_lower( 0, 0, coordinates )* vec[0], self.g_lower( 1, 1, coordinates )* vec[1]  ,self.g_lower( 1, 1, coordinates )* vec[1],self.g_lower( 1, 1, coordinates )* vec[1]]
+        [ self.g_lower( 0, 0, coordinates )* vec[0], self.g_lower( 1, 1, coordinates )* vec[1]  ,self.g_lower( 2, 2, coordinates )* vec[2],self.g_lower( 3, 3, coordinates )* vec[3] ]
     }
 
     // D x^mu/(D tau) = d x^mu/(d tau) + gamma^mu_alpha,beta x^alpha x^beta, this returns a closure |x^mu| gamma^mu_alpha,beta x^alpha x^beta 
@@ -283,3 +283,86 @@ impl<'a> SpaceObject<'a> for SchwarzschildObject<'a>{
 
 
 ////////////////////implementation of minkowski metric 
+
+
+
+
+//t,x,y,z
+pub struct MinkowskiMetric {
+}
+
+impl<'a> Metric<'a> for MinkowskiMetric {
+    type SpecificSpaceObject= MinkowskiObject<'a>;
+
+    fn get_christoffel (&self,_: i8,_: i8,_ :i8,_: &[f64;4]) -> f64{
+        return  0.0;
+    }
+
+    fn g_lower(&self, x0 :i8, x1 :i8,_ :&[f64;4]) -> f64{
+        match (x0,x1) {
+            (0,0) => 1.0 ,
+            (1,1) => -1.0,
+            (2,2) => -1.0,
+            (3,3) => -1.0,
+            __ => 0.0,
+        }
+    }
+
+    fn to_contra(&self,_ : &[f64;4] ,vec: &[f64;4]) -> [f64;4]{
+        [ vec[0], - vec[1]  ,- vec[2],- vec[3]]
+    }
+
+    // D x^mu/(D tau) = d x^mu/(d tau) + gamma^mu_alpha,beta x^alpha x^beta, this returns a closure |x^mu| gamma^mu_alpha,beta x^alpha x^beta 
+    fn covariant_derivative (&self,_:i8, _: & [f64;4], _:& [f64;4]  ) ->  Box<dyn Fn(f64)->f64+ 'a>{
+         Box::new( move |_: f64| -> f64 { 0.0})
+    } 
+
+    fn spawn_space_object(&'a self ,coordinates : [f64;4], momenta : [f64;4] , mass : f64 ) -> Self::SpecificSpaceObject{ 
+        MinkowskiObject{ coordinates : coordinates, momenta: momenta, _mass: mass, metric: &self }
+    }
+
+    fn spawn_space_object_from_cartesian( &'a self ,coordinates :[f64;4], momenta : [f64;4] , mass : f64) -> Self::SpecificSpaceObject{
+        self.spawn_space_object( coordinates , momenta, mass)
+    }
+}
+
+//implementation of a object living in a schwarzschildmetric
+
+pub struct MinkowskiObject <'a> {
+    coordinates : [f64;4],
+    momenta :  [f64;4],
+    metric: &'a MinkowskiMetric,
+    _mass : f64,
+}
+
+impl<'a> SpaceObject<'a> for MinkowskiObject<'a>{
+
+    fn get_coordinates(&self) -> &[f64;4]{
+        &self.coordinates
+    }
+    fn get_momenta(&self) -> &[f64;4]{
+        &self.momenta
+    }
+    fn get_mut_coordinates(&mut self) -> &mut [f64;4]{
+        &mut self.coordinates
+    }
+    fn get_mut_momenta(&mut self) -> &mut [f64;4]{
+        &mut self.momenta
+    }
+    fn get_contravariant_momenta (&self) -> [f64;4]{
+        self.metric.to_contra( self.get_coordinates(), self.get_momenta() )    
+    }
+
+    fn covariant_derivative (& self,index:i8, coor: & [f64;4],  vec :& [f64;4] ) ->  Box<dyn Fn(f64)->f64+ 'a>{
+        self.metric.covariant_derivative(index, coor,vec )
+    }
+
+    fn get_cartesian_coordinates_and_momenta(&self) -> [f64;8] {
+        let coor = self.get_coordinates();
+        let mom = self.get_momenta();
+        
+        [coor[0], coor[1],coor[2],coor[3],
+        mom[0], mom[1], mom[2], mom[3]]
+    }
+}
+

@@ -5,6 +5,8 @@ use curved_space::SpaceObject;
 use crate::python_interface;
 use crate::ray_tracer;
 
+
+
 /// setup1: launch parallel photons in the direction of the black hole an watch it bend
 
 
@@ -57,27 +59,110 @@ pub fn launch_parallel_photons(){
 //////////////////
 /// 
 
-pub fn ray_trace(){
-    let metric = curved_space::SchwarzschildMetric{ r_s : 1.0 };
+pub fn ray_trace_schwarzshild(){
+    let r_s = 1.0;
+    let metric = curved_space::SchwarzschildMetric{ r_s : r_s };
     let camera = ray_tracer::Camera{ 
-        pos : [0.0, -5.0,0.0,0.0],
+        pos : [0.0, -5.0,0.0,0.01],
         direction : [1.0,1.0,0.0,0.0],
-        x_res : 1920,
-        y_res : 1080,
+        x_res : 800,
+        y_res : 800,
         distance: 0.2,
         height : 0.3,
         width : 0.3, };
 
-    let col_objects : Vec< ray_tracer::CollsionObject > = vec![];
+    let colored_sphere = ray_tracer::CollsionObject{ detect_collision : Box::new( 
+            move |_: &[f64;4], new:  &[f64;4]|-> Option< image::Rgb<u8> > {
+                if new[1] <= 1.05* r_s {
+                    let p =  (10.0* new[3] / ( std::f64::consts::PI).round()  )as i64; 
+                    let h =  (10.0 * new[2]  / ( std::f64::consts::PI).round()  )as i64; 
+                    //println!("p{} h{} orig {} orig{}",p,h,new[2],new[3]);
+                    if (p+h)%2  == 0 {
+                        return Some( image::Rgb([255,0,0]) )
+                    }
+                    return  Some( image::Rgb([0,0,255]));
+                }
+                None
+            }
+        )};
+        
+    let outer_sphere = ray_tracer::CollsionObject{ detect_collision : Box::new( 
+        move |_: &[f64;4], new:  &[f64;4]|-> Option< image::Rgb<u8> > {
+            if new[1] >= 6.0* r_s {
+                return  Some( image::Rgb([0,0,0]));     //todo: map picture
+            }
+            None
+        }
+    )};    
 
-    let mut ray_tracer = ray_tracer::new( camera, col_objects,  &metric, false);
+    let col_objects : Vec< ray_tracer::CollsionObject > = vec![colored_sphere, outer_sphere];
 
-    for i in 0..1000 {
-        ray_tracer.take_step();
-        println!("step {}",i)
-    }
+    let mut ray_tracer = ray_tracer::new( camera, &col_objects,  &metric,2000 ,false);
+
+    
+    ray_tracer.run_simulation(5);
+
+
+    ray_tracer.generate_image("schw800x800.bmp");
 
     //ray_tracer.plot_paths();
 
 }
 
+
+pub fn ray_trace_minkowski(){
+    let r_s = 1.0;
+
+    let metric = curved_space::MinkowskiMetric{};
+    let camera = ray_tracer::Camera{ 
+        pos : [0.0, -5.0,0.0,0.01],
+        direction : [1.0,1.0,0.0,0.0],
+        x_res : 800,
+        y_res : 800,
+        distance: 0.2,
+        height : 0.3,
+        width : 0.3, };
+
+    let colored_sphere = ray_tracer::CollsionObject{ detect_collision : Box::new( 
+            move |_: &[f64;4], new:  &[f64;4]|-> Option< image::Rgb<u8> > {
+                let r = ( new[1].powi(2) + new[2].powi(2)+new[3].powi(2)).sqrt();
+                if r <= 1.05* r_s {
+
+                    let theta = (new[3]/r).acos();
+                    let phi =  new[2].atan2(new[1]);
+
+                    let p =  (10.0*theta / ( std::f64::consts::PI).round()  )as i64; 
+                    let h =  (10.0 * phi / ( std::f64::consts::PI).round()  )as i64; 
+
+                    if (p + h)%2  == 0 {
+                        return Some( image::Rgb([255,0,0]) )
+                    }
+                    return  Some( image::Rgb([0,0,255]));
+                }
+                None
+            }
+        )};
+        
+    let outer_sphere = ray_tracer::CollsionObject{ detect_collision : Box::new( 
+        move |_: &[f64;4], new:  &[f64;4]|-> Option< image::Rgb<u8> > {
+            let r = ( new[1].powi(2) + new[2].powi(2)+new[3].powi(2)).sqrt();
+            if r >= 6.0* r_s {
+                return  Some( image::Rgb([0,0,0]));     //todo: map picture
+            }
+            None
+        }
+    )};    
+
+    let col_objects : Vec< ray_tracer::CollsionObject > = vec![colored_sphere, outer_sphere];
+
+    let mut ray_tracer = ray_tracer::new( camera, &col_objects,  &metric,2000 ,false);
+
+    
+    ray_tracer.run_simulation(5);
+
+
+    ray_tracer.generate_image("flat800x800.bmp");
+
+    //ray_tracer.plot_paths();
+
+}

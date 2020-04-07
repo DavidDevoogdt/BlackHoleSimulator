@@ -6,3 +6,6 @@ version = "0.1.0"
 csv = "*"
 serde_derive = "*"
 serde = "*"
+image = "0.23.3"
+rayon = "*"
+indicatif = {version = "*", features = ["with_rayon"]}

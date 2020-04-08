@@ -4,7 +4,11 @@ use curved_space::SpaceObject;
 
 use crate::python_interface;
 use crate::ray_tracer;
+use crate::black_body;
 
+extern crate image;
+use self::image::{ImageBuffer, RgbImage};
+use std::path::Path;
 
 
 /// setup1: launch parallel photons in the direction of the black hole an watch it bend
@@ -166,3 +170,43 @@ pub fn ray_trace_minkowski(){
     //ray_tracer.plot_paths();
 
 }
+
+
+// blackbodytester
+
+pub fn generate_blackbody(T_min: f64, T_max:f64, steps: u32) {
+    let cie = black_body::cie_lookup::new();
+    
+
+    let ysteps = ( (steps as f64) /10.0).ceil() as u32;
+
+    let mut img: RgbImage = ImageBuffer::new(steps, ysteps);
+
+    for i in 0..steps {
+        let T = T_min + (T_max-T_min)*(i as f64)/(steps as f64);
+
+        let col = cie.get_black_body_intensity(T, -200.0);
+        for j in 0..ysteps {
+            img.put_pixel(i, j , col );
+        } 
+        
+    }
+
+    let p = Path::new("blackbody.bmp");
+
+    img.save_with_format( p,  image::ImageFormat::Bmp).unwrap();
+
+}
+
+fn test_wavelentgh_convo (){
+    let cie = black_body::cie_lookup::new();
+
+    let arr : [f64;3] = [435.8,546.1,700.0];
+
+    for (i,x) in arr.iter().enumerate() {
+        let col = cie.wavelength_to_rgb(*x);
+        println!("lambda: {} rgb: {},{},{}",x ,col[0], col[1],col[2] );
+    }
+
+     
+ }

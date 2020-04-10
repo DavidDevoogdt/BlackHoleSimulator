@@ -4,7 +4,7 @@ use self::image::{ImageBuffer, RgbImage};
 use std::path::Path;
 
 extern crate rayon;
-
+use std::convert::TryInto;
 
 
 use crate::curved_space;
@@ -36,8 +36,11 @@ impl<'a,T: curved_space::Metric<'a>  > RayTracer<'a,T> {
                  steps_taken +=1;
 
                 if steps_taken == steps_per_collision_detection {
+                    let coord = photon.dynamic.get_coordinates();
+                    let mom = photon.dynamic.get_momenta();
+
                      for obj in photon.collision_object.iter() {
-                        match (*obj.detect_collision )( &photon.prev_position , photon.dynamic.get_coordinates() ) {
+                        match  obj.detect_collision(&photon.prev_position,coord,mom   ) {
                             Some(x) => {
                                 //println!("photon colided");
                                 photon.final_color = Some(x); //todo account for redshift
@@ -47,6 +50,8 @@ impl<'a,T: curved_space::Metric<'a>  > RayTracer<'a,T> {
                             None => { },
                         }
                      }
+
+                     photon.prev_position = *coord;
 
                      steps_taken = 0;
                  }
@@ -81,7 +86,7 @@ impl<'a,T: curved_space::Metric<'a>  > RayTracer<'a,T> {
         for x in 0..(self.camera.x_res as u32) {
             for y in 0..(self.camera.y_res as u32){
                 //println!(" x:{} y:{}",x,y);
-                let color =  match self.photons[ (x+y*(self.camera.x_res as u32))  as usize].final_color {
+                let color =  match self.photons[ (y+x*(self.camera.y_res as u32))  as usize].final_color {
                     None => image::Rgb([0,255,0]),
                     Some(x) =>x, 
                 } ;
@@ -100,7 +105,7 @@ impl<'a,T: curved_space::Metric<'a>  > RayTracer<'a,T> {
 
 
 //This creates the initial photons for the chosen metric and associated space object
-pub fn new<'a,  T: curved_space::Metric<'a> > ( camera: Camera, objects : &'a Vec<CollsionObject>, metric : &'a T, max_steps : i32 ,save_path : bool ) -> RayTracer<'a,T> {
+pub fn new<'a,  T: curved_space::Metric<'a> > ( camera: Camera,objects:  &'a Vec< Box< dyn CollsionObject> >,metric : &'a T, max_steps : i32 ,save_path : bool ) -> RayTracer<'a,T> {
     let r = ( camera.direction[1].powi(2) + camera.direction[2].powi(2) + camera.direction[3].powi(2)).sqrt();
 
     let theta = (camera.direction[3]/r).acos();
@@ -109,8 +114,8 @@ pub fn new<'a,  T: curved_space::Metric<'a> > ( camera: Camera, objects : &'a Ve
     //let r2 =  (camera.direction[1].powi(2) + camera.direction[2].powi(2) ).sqrt();
 
 
-    let dheigth = camera.height/ (camera.x_res as f64);
-    let dwidth = camera.width/ (camera.y_res as f64);
+    let dheigth = camera.height/ (camera.y_res as f64);
+    let dwidth = camera.width/ (camera.x_res as f64);
 
     let dtheta = ( dheigth / camera.distance).atan();
     let dphi = ( dwidth / camera.distance).atan();
@@ -156,21 +161,223 @@ pub struct Camera {
     pub width : f64,
 }
 
-pub struct CollsionObject { //collision
-    // first old coor, then new ones
-    pub detect_collision :  Box< dyn Fn( &[f64;4], &[f64;4]) -> Option < image::Rgb<u8>>  + Send + Sync >  ,  //gets coordinates as input and returns option with color in wavelenth 
-    //bounding_box : [f64;3],
+
+
+
+pub trait CollsionObject: Send + Sync{
+    fn  detect_collision (& self, old: &[f64;4], new: &[f64;4], momentum:  &[f64;4] ) -> Option < image::Rgb<u8>>;
 }
 
+//
+pub struct Sphere {
+    pub radius : f64,
+    pub divisions : f64,
+    pub color1 : image::Rgb<u8>,
+    pub color2 : image::Rgb<u8>,
+}
+
+pub struct SphereCart {
+    pub radius : f64,
+    pub divisions : f64,
+    pub color1 : image::Rgb<u8>,
+    pub color2 : image::Rgb<u8>,
+}
+
+
+impl CollsionObject for Sphere{
+
+    fn  detect_collision (& self, _: &[f64;4], new:  &[f64;4] , _:  &[f64;4] ) -> Option < image::Rgb<u8>>{  
+
+
+        if new[1] <= self.radius {
+            let p =  ( self.divisions * new[3] / ( std::f64::consts::PI).round()  )as i64; 
+            let h =  ( self.divisions * new[2]  / ( std::f64::consts::PI).round()  )as i64; 
+            //println!("p{} h{} orig {} orig{}",p,h,new[2],new[3]);
+            if (p+h)%2  == 0 {
+                return Some( self.color1 )
+            }
+            return  Some( self.color2 );
+        }
+        None
+    }
+}
+
+impl CollsionObject for SphereCart{
+
+    fn  detect_collision (& self, _: &[f64;4], new: &[f64;4], _:  &[f64;4]) -> Option < image::Rgb<u8>>{  
+
+
+        let r = ( new[1].powi(2) + new[2].powi(2)+new[3].powi(2)).sqrt();
+        if r <= self.radius {
+
+            let theta = (new[3]/r).acos();
+            let phi =  new[2].atan2(new[1]);
+
+            let p =  (self.divisions *theta / ( std::f64::consts::PI).round()  )as i64; 
+            let h =  (self.divisions * phi / ( std::f64::consts::PI).round()  )as i64; 
+
+            if (p+h)%2  == 0 {
+                return Some( self.color1 )
+            }
+            return  Some( self.color2 );
+        }
+        None
+    }
+
+}
+
+
+// accretion disk
+
+pub struct Annulus {
+    pub radius1 : f64,
+    pub radius2 : f64,
+    pub divisions : f64,
+    pub color1 : image::Rgb<u8>,
+    pub color2 : image::Rgb<u8>,
+}
+
+pub struct AnnulusCart {
+    pub radius1 : f64,
+    pub radius2 : f64,
+    pub divisions : f64,
+    pub color1 : image::Rgb<u8>,
+    pub color2 : image::Rgb<u8>,
+}
+
+impl CollsionObject for Annulus{
+
+    fn  detect_collision (& self, old: &[f64;4], new: &[f64;4], _:  &[f64;4]) -> Option < image::Rgb<u8>>{  
+
+
+        if new[1] >= self.radius1 &&  new[1] <= self.radius2 {  
+            //theta switches side
+            if  (std::f64::consts::PI / 2.0 - new[3])* (std::f64::consts::PI / 2.0 - old[3]) < 0.0 {
+
+                let p =  (self.divisions * new[2] / ( std::f64::consts::PI).round()  )as i64; 
+
+                if p%2==0 {
+                    return  Some( self.color1);
+                }
+
+                return  Some( self.color2);
+                     
+            }                
+        }
+        None
+    }
+}
+
+impl CollsionObject for AnnulusCart{
+
+    fn  detect_collision (& self, old: &[f64;4], new: &[f64;4], _:  &[f64;4]) -> Option < image::Rgb<u8>>{  
+
+
+        let r = ( new[1].powi(2) + new[2].powi(2)+new[3].powi(2)).sqrt();
+
+        if r>= self.radius1 &&  r  <= self.radius2 {  
+
+            let theta1 = (new[3]/r).acos();
+            let theta2 = (old[3]/r).acos();
+                
+
+            //theta switches side
+            if  (std::f64::consts::PI / 2.0 - theta1)* (std::f64::consts::PI / 2.0 - theta2) < 0.0 {
+                
+                let phi =  new[2].atan2(new[1]);
+
+                let p =  (self.divisions * phi / ( std::f64::consts::PI).round()  )as i64; 
+
+                if p%2==0 {
+                    return  Some( self.color1);
+                }
+
+                return  Some( self.color2);
+                        
+            }                
+        }
+        None
+    }
+
+}
+
+// skybox
+
+pub struct Skybox {
+    pub x_res:i32,
+    pub y_res:i32,
+    pub image: image::RgbImage,
+    pub radius: f64,
+    pub phi_offset: f64,
+} 
+
+pub struct SkyboxCart {
+    pub x_res:i32,
+    pub y_res:i32,
+    pub image: image::RgbImage,
+    pub radius: f64,
+    pub phi_offset: f64,
+} 
+
+impl CollsionObject for Skybox {
+
+    fn  detect_collision (& self, _: &[f64;4], new: &[f64;4], momentum:  &[f64;4]) -> Option < image::Rgb<u8>>{  
+       
+
+        if new[1] < self.radius{
+
+            let [_, cart_mom] = curved_space::spher_to_cart(  new[1..3].try_into().unwrap(),  momentum[1..3].try_into().unwrap() );
+
+            let mom_r = (cart_mom[0].powi(2) + cart_mom[1].powi(2)+cart_mom[2].powi(2)).sqrt();
+
+            let theta = (cart_mom[2]/mom_r).acos();
+            let phi = cart_mom[1].atan2( cart_mom[0] );
+
+            let xcoor = ( (self.x_res as f64) * (  ( phi+self.phi_offset)/(2.0* std::f64::consts::PI))) as i32 % self.x_res ;
+            let ycoor = ( (self.y_res as f64) * (  ( theta                )/(     std::f64::consts::PI))) as i32 % self.y_res;
+
+            return Some( *self.image.get_pixel(xcoor as u32, ycoor as u32) )
+
+        }
+        None
+    }
+}
+impl CollsionObject for SkyboxCart {
+    fn  detect_collision (& self, _: &[f64;4], new: &[f64;4], momentum:  &[f64;4]) -> Option < image::Rgb<u8>>{  
+       
+
+        let r = ( new[1].powi(2) + new[2].powi(2)+new[3].powi(2)).sqrt();
+
+        if r > self.radius{
+
+            let cart_mom = momentum;
+
+            let mom_r = (cart_mom[1].powi(2) + cart_mom[2].powi(2)+cart_mom[3].powi(2)).sqrt();
+
+            let theta = (cart_mom[3]/mom_r).acos();
+            let phi = cart_mom[2].atan2( cart_mom[1] );
+
+            let xcoor = (( (self.x_res as f64) * (  ( phi+self.phi_offset)/(2.0* std::f64::consts::PI))) as i32  ).rem_euclid( self.x_res) ;
+            let ycoor = (( (self.y_res as f64) * (  ( theta                )/(     std::f64::consts::PI))) as i32 ) .rem_euclid( self.y_res);
+
+            return Some( *self.image.get_pixel(xcoor as u32, ycoor as u32) )
+
+        }
+        None
+    }
+}
+
+
+
+//
 pub struct Photon< 'a, T: curved_space::SpaceObject<'a> + std::marker::Send + std::marker::Sync >  {
     dynamic : T,
-
     prev_position :  [f64;4],
     d_lambda : f64,
     steps_left: i32,
     phamtom : std::marker::PhantomData<&'a T>,
     final_color : Option< image::Rgb<u8> >,
-    collision_object : &'a Vec< CollsionObject>,
+    collision_object : &'a Vec< Box< dyn CollsionObject> >,
     path : Vec< [f64;8]>,
     save_path : bool,
 }

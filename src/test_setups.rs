@@ -66,40 +66,46 @@ pub fn launch_parallel_photons(){
 pub fn ray_trace_schwarzshild(){
     let r_s = 1.0;
     let metric = curved_space::SchwarzschildMetric{ r_s : r_s };
+
     let camera = ray_tracer::Camera{ 
-        pos : [0.0, -5.0,0.0,0.01],
+        pos : [0.0, -8.0,0.0,1.0],
         direction : [1.0,1.0,0.0,0.0],
         x_res : 800,
         y_res : 800,
         distance: 0.2,
         height : 0.3,
-        width : 0.3, };
+        width: 0.3 };
 
-    let colored_sphere = ray_tracer::CollsionObject{ detect_collision : Box::new( 
-            move |_: &[f64;4], new:  &[f64;4]|-> Option< image::Rgb<u8> > {
-                if new[1] <= 1.05* r_s {
-                    let p =  (10.0* new[3] / ( std::f64::consts::PI).round()  )as i64; 
-                    let h =  (10.0 * new[2]  / ( std::f64::consts::PI).round()  )as i64; 
-                    //println!("p{} h{} orig {} orig{}",p,h,new[2],new[3]);
-                    if (p+h)%2  == 0 {
-                        return Some( image::Rgb([255,0,0]) )
-                    }
-                    return  Some( image::Rgb([0,0,255]));
-                }
-                None
-            }
-        )};
-        
-    let outer_sphere = ray_tracer::CollsionObject{ detect_collision : Box::new( 
-        move |_: &[f64;4], new:  &[f64;4]|-> Option< image::Rgb<u8> > {
-            if new[1] >= 6.0* r_s {
-                return  Some( image::Rgb([0,0,0]));     //todo: map picture
-            }
-            None
-        }
-    )};    
+    let colored_sphere = ray_tracer::Sphere{
+        color1: image::Rgb([255,0,0]),
+        color2: image::Rgb([0,0,255]),
+        radius: 1.05*r_s,
+        divisions: 10.0,
+    };
+    
+    let accretion_disk = ray_tracer::Annulus{
+        color1: image::Rgb([255,0,0]),
+        color2: image::Rgb([0,0,255]),
+        radius1: 3.0*r_s,
+        radius2: 6.0*r_s,
+        divisions: 10.0,
+    };
+    
+    let image = image::open("src/ESO_-_Milky_Way.jpg").unwrap().into_rgb();
+    let (xres,yres) = image.dimensions();
 
-    let col_objects : Vec< ray_tracer::CollsionObject > = vec![colored_sphere, outer_sphere];
+    let skybox = ray_tracer::SkyboxCart{
+        image: image,
+        radius: 10.0*r_s,
+        x_res: xres as i32,
+        y_res : yres as i32,
+        phi_offset: 0.0,
+    };
+   
+    
+
+    let col_objects : Vec< Box< dyn ray_tracer::CollsionObject> > = vec![Box::new(colored_sphere), Box::new(accretion_disk), Box::new(skybox) ];
+    //let col_objects : Vec< Box< dyn ray_tracer::CollsionObject> > = vec![Box::new(colored_sphere), Box::new(accretion_disk) ];
 
     let mut ray_tracer = ray_tracer::new( camera, &col_objects,  &metric,2000 ,false);
 
@@ -119,45 +125,44 @@ pub fn ray_trace_minkowski(){
 
     let metric = curved_space::MinkowskiMetric{};
     let camera = ray_tracer::Camera{ 
-        pos : [0.0, -5.0,0.0,0.01],
+        pos : [0.0, -8.0,0.0,1.0],
         direction : [1.0,1.0,0.0,0.0],
         x_res : 800,
         y_res : 800,
         distance: 0.2,
         height : 0.3,
-        width : 0.3, };
+        width: 0.3
+    };
 
-    let colored_sphere = ray_tracer::CollsionObject{ detect_collision : Box::new( 
-            move |_: &[f64;4], new:  &[f64;4]|-> Option< image::Rgb<u8> > {
-                let r = ( new[1].powi(2) + new[2].powi(2)+new[3].powi(2)).sqrt();
-                if r <= 1.05* r_s {
+    let colored_sphere = ray_tracer::SphereCart{
+        color1: image::Rgb([255,0,0]),
+        color2: image::Rgb([0,0,255]),
+        radius: 1.05*r_s,
+        divisions: 10.0,
+    };
+    
+    let accretion_disk = ray_tracer::AnnulusCart{
+        color1: image::Rgb([255,0,0]),
+        color2: image::Rgb([0,0,255]),
+        radius1: 3.0*r_s,
+        radius2: 6.0*r_s,
+        divisions: 10.0,
+    };  
 
-                    let theta = (new[3]/r).acos();
-                    let phi =  new[2].atan2(new[1]);
+    let image = image::open("src/ESO_-_Milky_Way.jpg").unwrap().into_rgb();
+    let (xres,yres) = image.dimensions();
 
-                    let p =  (10.0*theta / ( std::f64::consts::PI).round()  )as i64; 
-                    let h =  (10.0 * phi / ( std::f64::consts::PI).round()  )as i64; 
-
-                    if (p + h)%2  == 0 {
-                        return Some( image::Rgb([255,0,0]) )
-                    }
-                    return  Some( image::Rgb([0,0,255]));
-                }
-                None
-            }
-        )};
-        
-    let outer_sphere = ray_tracer::CollsionObject{ detect_collision : Box::new( 
-        move |_: &[f64;4], new:  &[f64;4]|-> Option< image::Rgb<u8> > {
-            let r = ( new[1].powi(2) + new[2].powi(2)+new[3].powi(2)).sqrt();
-            if r >= 6.0* r_s {
-                return  Some( image::Rgb([0,0,0]));     //todo: map picture
-            }
-            None
-        }
-    )};    
-
-    let col_objects : Vec< ray_tracer::CollsionObject > = vec![colored_sphere, outer_sphere];
+    let skybox = ray_tracer::SkyboxCart{
+        image: image,
+        radius: 10.0*r_s,
+        x_res: xres as i32,
+        y_res : yres as i32,
+        phi_offset: 0.0,
+    };
+   
+    
+let col_objects : Vec< Box< dyn ray_tracer::CollsionObject> > = vec![Box::new(colored_sphere), Box::new(accretion_disk), Box::new(skybox) ];
+//let col_objects : Vec< Box< dyn ray_tracer::CollsionObject> > = vec![Box::new(colored_sphere), Box::new(accretion_disk) ];
 
     let mut ray_tracer = ray_tracer::new( camera, &col_objects,  &metric,2000 ,false);
 
@@ -174,8 +179,8 @@ pub fn ray_trace_minkowski(){
 
 // blackbodytester
 
-pub fn generate_blackbody(T_min: f64, T_max:f64, steps: u32) {
-    let cie = black_body::cie_lookup::new();
+pub fn generate_blackbody(temp_min: f64, temp_max:f64, steps: u32) {
+    let cie = black_body::CieLookup::new();
     
 
     let ysteps = ( (steps as f64) /10.0).ceil() as u32;
@@ -183,9 +188,9 @@ pub fn generate_blackbody(T_min: f64, T_max:f64, steps: u32) {
     let mut img: RgbImage = ImageBuffer::new(steps, ysteps);
 
     for i in 0..steps {
-        let T = T_min + (T_max-T_min)*(i as f64)/(steps as f64);
+        let t = temp_min + (temp_max-temp_min)*(i as f64)/(steps as f64);
 
-        let col = cie.get_black_body_intensity(T, -200.0);
+        let col = cie.get_black_body_intensity(t, -200.0);
         for j in 0..ysteps {
             img.put_pixel(i, j , col );
         } 
@@ -198,12 +203,13 @@ pub fn generate_blackbody(T_min: f64, T_max:f64, steps: u32) {
 
 }
 
+#[test]
 fn test_wavelentgh_convo (){
-    let cie = black_body::cie_lookup::new();
+    let cie = black_body::CieLookup::new();
 
     let arr : [f64;3] = [435.8,546.1,700.0];
 
-    for (i,x) in arr.iter().enumerate() {
+    for (_,x) in arr.iter().enumerate() {
         let col = cie.wavelength_to_rgb(*x);
         println!("lambda: {} rgb: {},{},{}",x ,col[0], col[1],col[2] );
     }

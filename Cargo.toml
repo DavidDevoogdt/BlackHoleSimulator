@@ -4,8 +4,7 @@ version = "0.1.0"
 
 [dependencies]
 csv = "*"
-serde_derive = "*"
-serde = "*"
+serde = { version = "*", features = ["derive"] }
 image = "0.23.3"
 rayon = "*"
 indicatif = {version = "*", features = ["with_rayon"]}

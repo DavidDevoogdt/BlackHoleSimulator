@@ -1,3 +1,5 @@
+
+
 // Helper objects 
 
 /// integrate equation dy/dt = f(t,y) over a time step dt and store result in orig params
@@ -190,31 +192,27 @@ impl<'a> Metric<'a> for SchwarzschildMetric {
         SchwarzschildObject{ coordinates : coordinates, momenta: momenta, _mass: mass, metric: &self }
     }
 
+
+
     fn spawn_space_object_from_cartesian( &'a self ,coordinates :[f64;4], momenta : [f64;4] , mass : f64) -> Self::SpecificSpaceObject{
 
-        let r = ( coordinates[1].powi(2) + coordinates[2].powi(2) + coordinates[3].powi(2)).sqrt();
+        
 
-        let theta = (coordinates[3]/r).acos();
-        let phi =  coordinates[2].atan2(coordinates[1]);
-
-        let r2 =  (coordinates[1].powi(2) + coordinates[2].powi(2) ).sqrt();
-
-        let pc = coordinates[1]/r2;
-        let ps = coordinates[2]/r2;
-        let hc = coordinates[3]/r;
-        let hs = r2 /r;
+        let [coor,mom] = cart_to_spher(   &[coordinates[1],coordinates[2],coordinates[3]] ,  &[momenta[1],momenta[2],momenta[3]] );
 
         let newpos = [
             coordinates[0],
-            r,
-            phi,
-            theta];
+            coor[0],
+            coor[1],
+            coor[2]
+        ];
 
         let newmom =  [ 
-        momenta[0], //todo infer this momentum from energy mass relation
-        hs*pc* momenta[1] + hs*ps*momenta[2]+ hc*momenta[3],
-        -ps/(r*hs)*momenta[1] + pc/(r*hs) *momenta[2],
-        hc*pc/r *momenta[1] + hc*ps/r*momenta[2]-hs/r *momenta[3]];
+            momenta[0], //todo infer this momentum from energy mass relation
+            mom[0],
+            mom[1],
+            mom[2]
+        ];
 
 
         self.spawn_space_object( newpos , newmom, mass)
@@ -257,26 +255,23 @@ impl<'a> SpaceObject<'a> for SchwarzschildObject<'a>{
     }
 
     fn get_cartesian_coordinates_and_momenta(&self) -> [f64;8] {
-        let coor = self.get_coordinates();
-        let mom = self.get_momenta(); 
-    
-        let ps = coor[2].sin();
-        let pc = coor[2].cos();
-        let hs = coor[3].sin();
-        let hc = coor[3].cos();
+        let mut ret : [f64;8] = [0.0;8];
+        let coordinates = self.get_coordinates();
+        let momenta = self.get_momenta();
+
+        let [coor,mom] = cart_to_spher(  &[coordinates[1],coordinates[2],coordinates[3]] ,  &[momenta[1],momenta[2],momenta[3]]);
+        ret[0] = coordinates[0];
+        ret[4] = momenta[0];
+
+        for i in 1..4 {
+            ret[i] = coor[i-1];
+        }
+
+        for i in 5..9 {
+            ret[i] = mom[i-5];
+        }
         
-        let pr = mom[1];
-        let ph = mom[3];
-        let pp = mom[2];
-        
-        let r = coor[1];
-        
-        [coor[0], r* hs*pc,r* hs*ps,r* hc,
-        mom[0], 
-        hs*pc*pr + r*hc*pc*ph - r*hs*ps*pp,
-        hs*ps*pr + r*hc*ps*ph + r*ps*pc*pp,
-        hc*pr -r*hs*ph]
-        //todo convert time and energy properly
+        ret
     }
 }
 
@@ -364,5 +359,64 @@ impl<'a> SpaceObject<'a> for MinkowskiObject<'a>{
         [coor[0], coor[1],coor[2],coor[3],
         mom[0], mom[1], mom[2], mom[3]]
     }
+}
+
+
+// 
+
+pub fn spher_to_cart(coor: &[f64;3], mom: &[f64;3]) -> [ [f64;3];2] {
+
+    let ps = coor[2].sin();
+    let pc = coor[2].cos();
+    let hs = coor[3].sin();
+    let hc = coor[3].cos();
+    
+    let pr = mom[1];
+    let ph = mom[3];
+    let pp = mom[2];
+    
+    let r = coor[1];
+    
+    [
+        [
+            r* hs*pc,
+            r* hs*ps,
+            r* hc
+        ], 
+        [
+            hs*pc*pr + r*hc*pc*ph - r*hs*ps*pp,
+            hs*ps*pr + r*hc*ps*ph + r*ps*pc*pp,
+            hc*pr -r*hs*ph
+        ]
+    ]
+
+}
+
+pub fn cart_to_spher (coordinates: &[f64;3], momenta: &[f64;3]) -> [ [f64;3];2] {
+
+    let r = ( coordinates[0].powi(2) + coordinates[1].powi(2) + coordinates[2].powi(2)).sqrt();
+
+    let theta = (coordinates[2]/r).acos();
+    let phi =  coordinates[1].atan2(coordinates[0]);
+
+    let r2 =  (coordinates[0].powi(2) + coordinates[1].powi(2) ).sqrt();
+
+    let pc = coordinates[0]/r2;
+    let ps = coordinates[1]/r2;
+    let hc = coordinates[2]/r;
+    let hs = r2 /r;
+
+    let newpos = [
+        r,
+        phi,
+        theta];
+
+    let newmom =  [ 
+    hs*pc* momenta[0] + hs*ps*momenta[1]+ hc*momenta[2],
+    -ps/(r*hs)*momenta[0] + pc/(r*hs) *momenta[1],
+    hc*pc/r *momenta[0] + hc*ps/r*momenta[1]-hs/r *momenta[2]];
+
+    [newpos,newmom]
+
 }
 

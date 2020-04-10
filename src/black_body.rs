@@ -5,13 +5,7 @@ use self::serde::{Serialize, Deserialize};
 
 use std::fmt;
 
-use std::error::Error;
-use std::io;
-use std::process;
-
-use self::csv::StringRecord;
-
-pub struct cie_lookup{
+pub struct CieLookup{
     start: i32,
     end : i32,
     delta: i32,
@@ -20,7 +14,7 @@ pub struct cie_lookup{
 }
 
 
-
+#[allow(non_snake_case)]
 #[derive(Serialize, Deserialize, Debug)]
 struct XYZ{
     lambda: i32,
@@ -36,8 +30,8 @@ impl std::fmt::Display for XYZ {
     }
 }
 
-impl cie_lookup{
-    pub fn new() ->  cie_lookup {
+impl CieLookup{
+    pub fn new() ->  CieLookup {
         let mut arr : Vec< XYZ > = vec![];
 
         // Build the CSV reader and iterate over each record.
@@ -53,7 +47,7 @@ impl cie_lookup{
             arr.push( row );
         }
 
-        let ret = cie_lookup{start: arr[0].lambda ,steps: arr.len() ,end: arr.last().expect("something wen wrong parsing").lambda, delta:  arr[1].lambda-arr[0].lambda, array: arr};
+        let ret = CieLookup{start: arr[0].lambda ,steps: arr.len() ,end: arr.last().expect("something wen wrong parsing").lambda, delta:  arr[1].lambda-arr[0].lambda, array: arr};
 
         return  ret ;
     }
@@ -63,7 +57,7 @@ impl cie_lookup{
         
         // https://en.wikipedia.org/wiki/Planckian_locus
         //T in kelvin, lambda in nm
-        let planck = |lambda: f64,T: f64| -> f64 {  5.0*1.0E15*lambda.powi(-5)/ (  (1.43877E7/(T*lambda)).exp()   -1.0  ) };
+        let planck = |lambda: f64,temp: f64| -> f64 {  5.0*1.0E15*lambda.powi(-5)/ (  (1.43877E7/(temp*lambda)).exp()   -1.0  ) };
 
         let mut res_x: f64 = 0.0;
         let mut res_y: f64 = 0.0;
@@ -109,25 +103,25 @@ impl cie_lookup{
     pub fn xyz_to_rgb(x:f64, y:f64, z:f64) -> image::Rgb<u8> {
 
         //https://en.wikipedia.org/wiki/CIE_1931_color_space
-        let mut R = 0.41847*x + -0.15866 *y + -0.082835*z;
-        let mut G = -0.091169*x + 0.25243*y + 0.015708*z;
-        let mut B = 0.00092090*x + -0.0025498*y + 0.17860 *z;
+        let mut big_r = 0.41847*x + -0.15866 *y + -0.082835*z;
+        let mut big_g = -0.091169*x + 0.25243*y + 0.015708*z;
+        let mut big_b = 0.00092090*x + -0.0025498*y + 0.17860 *z;
 
-        if R < 0.0 {
-            R = 0.0;
+        if big_r < 0.0 {
+            big_r = 0.0;
         }
-        if G < 0.0 {
-            G = 0.0;
+        if big_g < 0.0 {
+            big_g = 0.0;
         }
-        if B < 0.0 {
-            B = 0.0;
+        if big_b < 0.0 {
+            big_b = 0.0;
         }
 
-        println!("{} {} {}",R,G,B);
+        println!("{} {} {}",big_r,big_g,big_b);
 
-        let r : u8 = (255.0 * R/(R+G+B)) as u8;
-        let g : u8 = (255.0 * G/(R+G+B)) as u8;
-        let b : u8 = (255.0 * B/(R+G+B)) as u8;
+        let r : u8 = (255.0 * big_r/(big_r+big_g+big_b)) as u8;
+        let g : u8 = (255.0 * big_g/(big_r+big_g+big_b)) as u8;
+        let b : u8 = (255.0 * big_b/(big_r+big_g+big_b)) as u8;
 
         println!("{} {} {}",r,g,b);
 

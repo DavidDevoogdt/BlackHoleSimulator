@@ -259,7 +259,8 @@ impl<'a> SpaceObject<'a> for SchwarzschildObject<'a>{
         let coordinates = self.get_coordinates();
         let momenta = self.get_momenta();
 
-        let [coor,mom] = cart_to_spher(  &[coordinates[1],coordinates[2],coordinates[3]] ,  &[momenta[1],momenta[2],momenta[3]]);
+        let [coor,mom] = spher_to_cart(  &[coordinates[1],coordinates[2],coordinates[3]] ,  &[momenta[1],momenta[2],momenta[3]]);
+
         ret[0] = coordinates[0];
         ret[4] = momenta[0];
 
@@ -267,7 +268,7 @@ impl<'a> SpaceObject<'a> for SchwarzschildObject<'a>{
             ret[i] = coor[i-1];
         }
 
-        for i in 5..9 {
+        for i in 5..8 {
             ret[i] = mom[i-5];
         }
         
@@ -366,16 +367,16 @@ impl<'a> SpaceObject<'a> for MinkowskiObject<'a>{
 
 pub fn spher_to_cart(coor: &[f64;3], mom: &[f64;3]) -> [ [f64;3];2] {
 
-    let ps = coor[2].sin();
-    let pc = coor[2].cos();
-    let hs = coor[3].sin();
-    let hc = coor[3].cos();
+    let ps = coor[1].sin();
+    let pc = coor[1].cos();
+    let hs = coor[2].sin();
+    let hc = coor[2].cos();
     
-    let pr = mom[1];
-    let ph = mom[3];
-    let pp = mom[2];
+    let pr = mom[0];
+    let ph = mom[2];
+    let pp = mom[1];
     
-    let r = coor[1];
+    let r = coor[0];
     
     [
         [

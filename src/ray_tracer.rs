@@ -105,7 +105,7 @@ impl<'a,T: curved_space::Metric<'a>  > RayTracer<'a,T> {
 
 
 //This creates the initial photons for the chosen metric and associated space object
-pub fn new<'a,  T: curved_space::Metric<'a> > ( camera: Camera,objects:  &'a Vec< Box< dyn CollsionObject> >,metric : &'a T, max_steps : i32 ,save_path : bool ) -> RayTracer<'a,T> {
+pub fn new<'a,  T: curved_space::Metric<'a> > ( camera: Camera,objects:  &'a Vec< Box< dyn CollsionObject> >,metric : &'a T, max_steps : i32 ,save_path : bool, d_lambda: f64 ) -> RayTracer<'a,T> {
     let r = ( camera.direction[1].powi(2) + camera.direction[2].powi(2) + camera.direction[3].powi(2)).sqrt();
 
     let theta = (camera.direction[3]/r).acos();
@@ -140,7 +140,7 @@ pub fn new<'a,  T: curved_space::Metric<'a> > ( camera: Camera,objects:  &'a Vec
             
             let prev_pos = obj.get_coordinates().clone();
 
-            let p = Photon{ save_path: save_path, collision_object: objects ,prev_position : prev_pos,dynamic: obj , d_lambda: 0.01, steps_left: max_steps,path: vec![] ,phamtom  :  std::marker::PhantomData, final_color: None };
+            let p = Photon{ save_path: save_path, collision_object: objects ,prev_position : prev_pos,dynamic: obj , d_lambda: d_lambda, steps_left: max_steps,path: vec![] ,phamtom  :  std::marker::PhantomData, final_color: None };
 
             photon_array.push( p) ;
         }
@@ -322,26 +322,30 @@ pub struct SkyboxCart {
 impl CollsionObject for Skybox {
 
     fn  detect_collision (& self, _: &[f64;4], new: &[f64;4], momentum:  &[f64;4]) -> Option < image::Rgb<u8>>{  
+
        
+        let r =new[1];
 
-        if new[1] < self.radius{
+        if r > self.radius {
 
-            let [_, cart_mom] = curved_space::spher_to_cart(  new[1..3].try_into().unwrap(),  momentum[1..3].try_into().unwrap() );
+            let [cart_coor,cart_mom] = curved_space::spher_to_cart( &[new[1],new[2],new[3]] , & [momentum[1],momentum[2],momentum[3]]);
 
             let mom_r = (cart_mom[0].powi(2) + cart_mom[1].powi(2)+cart_mom[2].powi(2)).sqrt();
 
             let theta = (cart_mom[2]/mom_r).acos();
             let phi = cart_mom[1].atan2( cart_mom[0] );
 
-            let xcoor = ( (self.x_res as f64) * (  ( phi+self.phi_offset)/(2.0* std::f64::consts::PI))) as i32 % self.x_res ;
-            let ycoor = ( (self.y_res as f64) * (  ( theta                )/(     std::f64::consts::PI))) as i32 % self.y_res;
+            let xcoor = (( (self.x_res as f64) * (  ( phi+self.phi_offset)/(2.0* std::f64::consts::PI))) as i32  ).rem_euclid( self.x_res) ;
+            let ycoor = (( (self.y_res as f64) * (  ( theta                )/(     std::f64::consts::PI))) as i32 ) .rem_euclid( self.y_res);
 
             return Some( *self.image.get_pixel(xcoor as u32, ycoor as u32) )
-
+            //return Some( image::Rgb([ (xcoor*255/self.x_res).try_into().unwrap() ,0,0]) )
         }
+
         None
     }
 }
+
 impl CollsionObject for SkyboxCart {
     fn  detect_collision (& self, _: &[f64;4], new: &[f64;4], momentum:  &[f64;4]) -> Option < image::Rgb<u8>>{  
        
@@ -361,7 +365,7 @@ impl CollsionObject for SkyboxCart {
             let ycoor = (( (self.y_res as f64) * (  ( theta                )/(     std::f64::consts::PI))) as i32 ) .rem_euclid( self.y_res);
 
             return Some( *self.image.get_pixel(xcoor as u32, ycoor as u32) )
-
+            //return Some( image::Rgb([ (xcoor*255/self.x_res).try_into().unwrap() ,0,0]) )
         }
         None
     }

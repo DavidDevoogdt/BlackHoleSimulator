@@ -64,17 +64,24 @@ pub fn launch_parallel_photons(){
 /// 
 
 pub fn ray_trace_schwarzshild(){
-    let r_s = 1.0;
+    let r_s = 0.1;
     let metric = curved_space::SchwarzschildMetric{ r_s : r_s };
 
     let camera = ray_tracer::Camera{ 
-        pos : [0.0, -8.0,0.0,1.0],
+        pos : [0.0, -8.0,0.0,0.0],
         direction : [1.0,1.0,0.0,0.0],
         x_res : 800,
         y_res : 800,
-        distance: 0.2,
+        distance: 0.3,
         height : 0.3,
         width: 0.3 };
+
+    let black_sphere = ray_tracer::Sphere{
+        color1: image::Rgb([0,0,0]),
+        color2: image::Rgb([0,0,0]),
+        radius: 1.05*r_s,
+        divisions: 10.0,
+    };
 
     let colored_sphere = ray_tracer::Sphere{
         color1: image::Rgb([255,0,0]),
@@ -91,29 +98,32 @@ pub fn ray_trace_schwarzshild(){
         divisions: 10.0,
     };
     
-    let image = image::open("src/ESO_-_Milky_Way.jpg").unwrap().into_rgb();
+    
+    let image = image::open("src_files/ESO_-_Milky_Way.jpg").unwrap().into_rgb();
+    //let image = image::open("src/download.jpeg").unwrap().into_rgb();
     let (xres,yres) = image.dimensions();
 
-    let skybox = ray_tracer::SkyboxCart{
+    let skybox = ray_tracer::Skybox{
         image: image,
-        radius: 10.0*r_s,
+        radius: 10.0,
         x_res: xres as i32,
         y_res : yres as i32,
-        phi_offset: 0.0,
+        phi_offset: std::f64::consts::PI,
     };
    
+    //let col_objects : Vec< Box< dyn ray_tracer::CollsionObject> > = vec![Box::new(colored_sphere), Box::new(accretion_disk), Box::new(skybox) ];
+    let col_objects : Vec< Box< dyn ray_tracer::CollsionObject> > = vec![Box::new(skybox), Box::new(black_sphere) ];
     
 
-    let col_objects : Vec< Box< dyn ray_tracer::CollsionObject> > = vec![Box::new(colored_sphere), Box::new(accretion_disk), Box::new(skybox) ];
     //let col_objects : Vec< Box< dyn ray_tracer::CollsionObject> > = vec![Box::new(colored_sphere), Box::new(accretion_disk) ];
 
-    let mut ray_tracer = ray_tracer::new( camera, &col_objects,  &metric,2000 ,false);
+    let mut ray_tracer = ray_tracer::new( camera, &col_objects,  &metric,10000 ,false,0.01);
 
     
     ray_tracer.run_simulation(5);
 
-
-    ray_tracer.generate_image("schw800x800.bmp");
+    //ray_tracer.plot_paths();
+    ray_tracer.generate_image("src_files/schw800x800.bmp");
 
     //ray_tracer.plot_paths();
 
@@ -121,18 +131,18 @@ pub fn ray_trace_schwarzshild(){
 
 
 pub fn ray_trace_minkowski(){
-    let r_s = 1.0;
+    let r_s = 0.1;
 
     let metric = curved_space::MinkowskiMetric{};
     let camera = ray_tracer::Camera{ 
         pos : [0.0, -8.0,0.0,1.0],
         direction : [1.0,1.0,0.0,0.0],
-        x_res : 800,
-        y_res : 800,
-        distance: 0.2,
+        x_res : 200,
+        y_res : 200,
+        distance: 0.3,
         height : 0.3,
-        width: 0.3
-    };
+        width: 0.3 };
+
 
     let colored_sphere = ray_tracer::SphereCart{
         color1: image::Rgb([255,0,0]),
@@ -149,28 +159,30 @@ pub fn ray_trace_minkowski(){
         divisions: 10.0,
     };  
 
-    let image = image::open("src/ESO_-_Milky_Way.jpg").unwrap().into_rgb();
+    let image = image::open("src_files/ESO_-_Milky_Way.jpg").unwrap().into_rgb();
+    //let image = image::open("src/download.jpeg").unwrap().into_rgb();
     let (xres,yres) = image.dimensions();
 
     let skybox = ray_tracer::SkyboxCart{
         image: image,
-        radius: 10.0*r_s,
+        radius: 10.0,
         x_res: xres as i32,
         y_res : yres as i32,
-        phi_offset: 0.0,
+        phi_offset: std::f64::consts::PI,
     };
    
-    
-let col_objects : Vec< Box< dyn ray_tracer::CollsionObject> > = vec![Box::new(colored_sphere), Box::new(accretion_disk), Box::new(skybox) ];
-//let col_objects : Vec< Box< dyn ray_tracer::CollsionObject> > = vec![Box::new(colored_sphere), Box::new(accretion_disk) ];
+        
+    //let col_objects : Vec< Box< dyn ray_tracer::CollsionObject> > = vec![Box::new(colored_sphere), Box::new(accretion_disk), Box::new(skybox) ];
+    //let col_objects : Vec< Box< dyn ray_tracer::CollsionObject> > = vec![Box::new(colored_sphere), Box::new(accretion_disk) ];
+    let col_objects : Vec< Box< dyn ray_tracer::CollsionObject> > = vec![Box::new(skybox) ];
 
-    let mut ray_tracer = ray_tracer::new( camera, &col_objects,  &metric,2000 ,false);
+    let mut ray_tracer = ray_tracer::new( camera, &col_objects,  &metric,2000 ,false,0.1);
 
     
     ray_tracer.run_simulation(5);
 
 
-    ray_tracer.generate_image("flat800x800.bmp");
+    ray_tracer.generate_image("files/flat800x800.bmp");
 
     //ray_tracer.plot_paths();
 
@@ -197,7 +209,7 @@ pub fn generate_blackbody(temp_min: f64, temp_max:f64, steps: u32) {
         
     }
 
-    let p = Path::new("blackbody.bmp");
+    let p = Path::new("files/blackbody.bmp");
 
     img.save_with_format( p,  image::ImageFormat::Bmp).unwrap();
 

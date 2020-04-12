@@ -36,7 +36,7 @@ impl CieLookup{
 
         // Build the CSV reader and iterate over each record.
         //data table taken from: http://cvrl.ucl.ac.uk/cmfs.htm
-        let mut rdr = csv::Reader::from_path("src/CIE_color_table.csv").unwrap();
+        let mut rdr = csv::Reader::from_path("src_files/CIE_color_table.csv").unwrap();
         
 
 

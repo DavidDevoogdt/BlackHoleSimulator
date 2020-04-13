@@ -42,7 +42,7 @@ elif name == 'xyz':
     ax = fig.add_subplot(111, projection='3d')
 
     #plt.axis('equal')
-    plt.xlim(-5 ,5)
+    plt.xlim(-10,10)
     plt.ylim(-5,5)
     ax.set_zlim(-5,5)
 

@@ -4,6 +4,9 @@ pub mod python_interface;
 pub mod test_setups;
 pub mod black_body;
 
+use curved_space::Metric;
+use curved_space::SpaceObject;
+
 
 fn main() {
     //test_setups::launch_parallel_photons();
@@ -11,13 +14,13 @@ fn main() {
     println!("plotting in curved space!");
     test_setups::ray_trace_schwarzshild();
     
-    println!("plotting in flat space!");
-    test_setups::ray_trace_minkowski();
+    //println!("plotting in flat space!");
+    //test_setups::ray_trace_minkowski();
     
     //test_setups::generate_blackbody(1000.0,10000.0,200);
-    
 
- }
+
+}
 
 
 

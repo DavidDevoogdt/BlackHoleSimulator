@@ -46,7 +46,7 @@ pub fn launch_parallel_photons(){
             v.push( x.get_cartesian_coordinates_and_momenta() ); //creates a copy to push
             x.take_step(0.01);
 
-            if x.get_coordinates()[1] < 1.05 {
+            if x.get_coordinates_patch()[1] < 1.05 {
                 break;
             }
         
@@ -67,19 +67,28 @@ pub fn ray_trace_schwarzshild(){
     let r_s = 0.1;
     let metric = curved_space::SchwarzschildMetric{ r_s : r_s };
 
+    // let camera = ray_tracer::Camera{ 
+    //     pos : [0.0, -8.0,0.0,0.0],
+    //     direction : [1.0,1.0,0.0,0.0],
+    //     x_res : 1920,
+    //     y_res : 1080,
+    //     distance: 0.1,
+    //     height : 0.09,
+    //     width: 0.16 };
+
     let camera = ray_tracer::Camera{ 
         pos : [0.0, -8.0,0.0,0.0],
         direction : [1.0,1.0,0.0,0.0],
-        x_res : 800,
-        y_res : 800,
-        distance: 0.3,
+        x_res : 200,
+        y_res : 200,
+        distance: 2.0,
         height : 0.3,
         width: 0.3 };
 
     let black_sphere = ray_tracer::Sphere{
         color1: image::Rgb([0,0,0]),
         color2: image::Rgb([0,0,0]),
-        radius: 1.05*r_s,
+        radius: 1.0*r_s,
         divisions: 10.0,
     };
 
@@ -120,7 +129,7 @@ pub fn ray_trace_schwarzshild(){
     let mut ray_tracer = ray_tracer::new( camera, &col_objects,  &metric,10000 ,false,0.01);
 
     
-    ray_tracer.run_simulation(5);
+    ray_tracer.run_simulation(2);
 
     //ray_tracer.plot_paths();
     ray_tracer.generate_image("src_files/schw800x800.bmp");
@@ -226,5 +235,31 @@ fn test_wavelentgh_convo (){
         println!("lambda: {} rgb: {},{},{}",x ,col[0], col[1],col[2] );
     }
 
-     
  }
+
+
+ //
+
+//  for _ in 0..2 {
+
+
+    // let metric = curved_space::SchwarzschildMetric{r_s:1.0};
+    // let mut  phot = metric.spawn_space_object_from_cartesian( [0.0,-1.0,2.5,0.4],[1.0,1.0,0.7,3.8],0.0 );
+//     phot.switch_patch();
+
+//     println!("\n cart coor");
+//     let a = phot.get_cartesian_coordinates_and_momenta();
+//     let b = phot.get_coordinates_patch();
+//     let c = phot.get_momenta_patch();
+//     for i in 0..8{
+//         print!("{} ",a[i]);
+//     }
+//     println!("\n representation:");
+//     for i in 0..4{
+//         print!("{} ",b[i]);
+//     }
+//     for i in 0..4{
+//         print!("{} ",c[i]);
+//     }
+
+// }

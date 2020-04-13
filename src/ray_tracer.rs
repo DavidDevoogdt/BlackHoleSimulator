@@ -117,19 +117,28 @@ impl<'a,T: curved_space::Metric<'a>  > RayTracer<'a,T> {
 
 //This creates the initial photons for the chosen metric and associated space object
 pub fn new<'a,  T: curved_space::Metric<'a> > ( camera: Camera,objects:  &'a Vec< Box< dyn CollsionObject> >,metric : &'a T, max_steps : i32 ,save_path : bool, d_lambda: f64 ) -> RayTracer<'a,T> {
-    let r = ( camera.direction[1].powi(2) + camera.direction[2].powi(2) + camera.direction[3].powi(2)).sqrt();
+    let r =  (camera.direction[0].powi(2)+camera.direction[1].powi(2)+camera.direction[2].powi(2)).sqrt();
 
-    let theta = (camera.direction[3]/r).acos();
-    let phi =  camera.direction[2].atan2(camera.direction[1]);
-
-    //let r2 =  (camera.direction[1].powi(2) + camera.direction[2].powi(2) ).sqrt();
-
+    let theta = (camera.direction[2]/r).acos();
+    let phi =  camera.direction[1].atan2(camera.direction[0]);
 
     let dheigth = camera.height/ (camera.y_res as f64);
     let dwidth = camera.width/ (camera.x_res as f64);
 
-    let dtheta = ( dheigth / camera.distance).atan();
-    let dphi = ( dwidth / camera.distance).atan();
+    let theta_x = (theta.cos()*phi.cos())*( dheigth )    ;
+    let theta_y = (theta.cos()*phi.sin())*( dheigth );
+    let theta_z = (-theta.sin())*( dheigth );
+
+    let phi_x = (-phi.sin())*( dwidth );
+    let phi_y = (phi.cos())*( dwidth );
+
+    //let r2 =  (camera.direction[1].powi(2) + camera.direction[2].powi(2) ).sqrt();
+
+
+    let x_dir = camera.direction[0]*camera.distance/r;
+    let y_dir = camera.direction[1]*camera.distance/r;
+    let z_dir = camera.direction[2]*camera.distance/r;
+
 
     let mut photon_array = Vec::with_capacity( (camera.x_res*camera.y_res) as usize );
 
@@ -137,21 +146,22 @@ pub fn new<'a,  T: curved_space::Metric<'a> > ( camera: Camera,objects:  &'a Vec
         
         for y in 0..camera.y_res{
 
+            let th =  ((2*y -camera.y_res + 1 ) as f64 ) /2.0 ;
+            let ph = ((2*x -camera.x_res + 1 ) as f64 ) /2.0;
 
-            //println!( "{}", ((2*y -camera.y_res + 1 ) as f64 ) /2.0 );
- 
-            let th = theta + ((2*y -camera.y_res + 1 ) as f64 ) /2.0 *dtheta;
-            let ph = phi+ ((2*x -camera.x_res + 1 ) as f64 ) /2.0 *dphi;
-            let thc = th.cos();
-            let ths = th.sin();
-            let phc = ph.cos();
-            let phs = ph.sin();
 
-            let obj  = metric.spawn_space_object_from_cartesian( camera.pos , [1.0, ths*phc, ths*phs, thc], 0.0 );
+            let px = x_dir + th* theta_x+ ph*phi_x;
+            let py = y_dir + th* theta_y+ ph*phi_y;
+            let pz = z_dir + th* theta_z;
+
+            let norm =  (px.powi(2)+py.powi(2)+pz.powi(2)).sqrt();
+
+
+            let obj  = metric.spawn_space_object_from_cartesian( [0.0, camera.pos[0],camera.pos[1],camera.pos[2] ] , [1.0, px/norm,  py/norm, pz/norm], 0.0 );
             
             let prev_pos = obj.get_coordinates_and_momenta()[0].clone();
 
-            let p = Photon{ save_path: save_path, collision_object: objects ,prev_position : prev_pos,dynamic: obj , d_lambda: d_lambda, steps_left: max_steps,path: vec![] ,phamtom  :  std::marker::PhantomData, final_color: None };
+            let p = Photon{ save_path: save_path, collision_object: objects ,prev_position : prev_pos,dynamic: obj , d_lambda: d_lambda, steps_left: max_steps,path: vec![] ,phantom  :  std::marker::PhantomData, final_color: None };
 
             photon_array.push( p) ;
         }
@@ -163,8 +173,8 @@ pub fn new<'a,  T: curved_space::Metric<'a> > ( camera: Camera,objects:  &'a Vec
 
 //in cartesian coordinates
 pub struct Camera {
-    pub pos : [f64;4],
-    pub direction : [f64;4],
+    pub pos : [f64;3],
+    pub direction : [f64;3],
     pub x_res : i32,
     pub y_res : i32,
     pub distance: f64,
@@ -262,6 +272,7 @@ impl CollsionObject for Annulus{
 
 
         if new[1] >= self.radius1 &&  new[1] <= self.radius2 {  
+
             //theta switches side
             if  (std::f64::consts::PI / 2.0 - new[3])* (std::f64::consts::PI / 2.0 - old[3]) < 0.0 {
 
@@ -390,7 +401,7 @@ pub struct Photon< 'a, T: curved_space::SpaceObject<'a> + std::marker::Send + st
     prev_position :  [f64;4],
     d_lambda : f64,
     steps_left: i32,
-    phamtom : std::marker::PhantomData<&'a T>,
+    phantom : std::marker::PhantomData<&'a T>,
     final_color : Option< image::Rgb<u8> >,
     collision_object : &'a Vec< Box< dyn CollsionObject> >,
     path : Vec< [f64;8]>,

@@ -68,8 +68,8 @@ pub fn ray_trace_schwarzshild(){
     let metric = curved_space::SchwarzschildMetric{ r_s : r_s };
 
     // let camera = ray_tracer::Camera{ 
-    //     pos : [0.0, -8.0,0.0,0.0],
-    //     direction : [1.0,1.0,0.0,0.0],
+    //     pos : [ -8.0,0.0,0.0],
+    //     direction : [1.0,0.0,0.0],
     //     x_res : 1920,
     //     y_res : 1080,
     //     distance: 0.1,
@@ -77,13 +77,14 @@ pub fn ray_trace_schwarzshild(){
     //     width: 0.16 };
 
     let camera = ray_tracer::Camera{ 
-        pos : [0.0, -8.0,0.0,0.0],
-        direction : [1.0,1.0,0.0,0.0],
-        x_res : 200,
-        y_res : 200,
-        distance: 2.0,
-        height : 0.3,
-        width: 0.3 };
+        pos : [ -8.0,0.0,1.0],
+        direction : [1.0,0.0,-0.125],
+        x_res : 320,
+        y_res : 180,
+        distance: 0.1,
+        width: 0.16,
+        height : 0.09,
+        };
 
     let black_sphere = ray_tracer::Sphere{
         color1: image::Rgb([0,0,0]),
@@ -92,18 +93,18 @@ pub fn ray_trace_schwarzshild(){
         divisions: 10.0,
     };
 
-    let colored_sphere = ray_tracer::Sphere{
-        color1: image::Rgb([255,0,0]),
-        color2: image::Rgb([0,0,255]),
-        radius: 1.05*r_s,
-        divisions: 10.0,
-    };
+    // let colored_sphere = ray_tracer::Sphere{
+    //     color1: image::Rgb([255,0,0]),
+    //     color2: image::Rgb([0,0,255]),
+    //     radius: 1.05*r_s,
+    //     divisions: 5.0,
+    // };
     
     let accretion_disk = ray_tracer::Annulus{
         color1: image::Rgb([255,0,0]),
         color2: image::Rgb([0,0,255]),
         radius1: 3.0*r_s,
-        radius2: 6.0*r_s,
+        radius2: 7.0*r_s,
         divisions: 10.0,
     };
     
@@ -120,8 +121,9 @@ pub fn ray_trace_schwarzshild(){
         phi_offset: std::f64::consts::PI,
     };
    
-    //let col_objects : Vec< Box< dyn ray_tracer::CollsionObject> > = vec![Box::new(colored_sphere), Box::new(accretion_disk), Box::new(skybox) ];
-    let col_objects : Vec< Box< dyn ray_tracer::CollsionObject> > = vec![Box::new(skybox), Box::new(black_sphere) ];
+    let col_objects : Vec< Box< dyn ray_tracer::CollsionObject> > = vec![Box::new(black_sphere), Box::new(accretion_disk), Box::new(skybox) ];
+    
+    //let col_objects : Vec< Box< dyn ray_tracer::CollsionObject> > = vec![Box::new(skybox), Box::new(black_sphere) ];
     
 
     //let col_objects : Vec< Box< dyn ray_tracer::CollsionObject> > = vec![Box::new(colored_sphere), Box::new(accretion_disk) ];
@@ -144,8 +146,8 @@ pub fn ray_trace_minkowski(){
 
     let metric = curved_space::MinkowskiMetric{};
     let camera = ray_tracer::Camera{ 
-        pos : [0.0, -8.0,0.0,1.0],
-        direction : [1.0,1.0,0.0,0.0],
+        pos : [ -4.0,-4.0,0.0],
+        direction : [1.0,1.0,0.0],
         x_res : 200,
         y_res : 200,
         distance: 0.3,
@@ -238,7 +240,7 @@ fn test_wavelentgh_convo (){
  }
 
 
- //
+//
 
 //  for _ in 0..2 {
 

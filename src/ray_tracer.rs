@@ -4,11 +4,15 @@ use self::image::{ImageBuffer, RgbImage};
 use std::path::Path;
 
 extern crate rayon;
-use std::convert::TryInto;
+
 
 
 use crate::curved_space;
 use curved_space::SpaceObject;
+
+
+
+
 use crate::python_interface;
 
 extern crate indicatif;
@@ -32,15 +36,20 @@ impl<'a,T: curved_space::Metric<'a>  > RayTracer<'a,T> {
             'outer: while photon.steps_left > 0 {
                  photon.steps_left -=1;
 
-                 photon.dynamic.take_step( photon.d_lambda );
-                 steps_taken +=1;
+                photon.dynamic.take_step( photon.d_lambda );
+                steps_taken +=1;
+
+                
 
                 if steps_taken == steps_per_collision_detection {
-                    let coord = photon.dynamic.get_coordinates();
-                    let mom = photon.dynamic.get_momenta();
+                    
+                    
+                    photon.dynamic.sanitize_coordinates();
+
+                    let [coord,mom] = photon.dynamic.get_coordinates_and_momenta();
 
                      for obj in photon.collision_object.iter() {
-                        match  obj.detect_collision(&photon.prev_position,coord,mom   ) {
+                        match  obj.detect_collision(&photon.prev_position,&coord,&mom   ) {
                             Some(x) => {
                                 //println!("photon colided");
                                 photon.final_color = Some(x); //todo account for redshift
@@ -51,7 +60,7 @@ impl<'a,T: curved_space::Metric<'a>  > RayTracer<'a,T> {
                         }
                      }
 
-                     photon.prev_position = *coord;
+                     photon.prev_position = coord;
 
                      steps_taken = 0;
                  }
@@ -69,6 +78,8 @@ impl<'a,T: curved_space::Metric<'a>  > RayTracer<'a,T> {
         if self.save_path {
 
             for (i,photon) in self.photons.iter().enumerate() {
+
+                //println!("{}",photon.path[0] [1]  );                
                 let _ = python_interface::save_to_csv( &photon.path, format!("files/photon{}.csv", i)  );
             }
 
@@ -138,7 +149,7 @@ pub fn new<'a,  T: curved_space::Metric<'a> > ( camera: Camera,objects:  &'a Vec
 
             let obj  = metric.spawn_space_object_from_cartesian( camera.pos , [1.0, ths*phc, ths*phs, thc], 0.0 );
             
-            let prev_pos = obj.get_coordinates().clone();
+            let prev_pos = obj.get_coordinates_and_momenta()[0].clone();
 
             let p = Photon{ save_path: save_path, collision_object: objects ,prev_position : prev_pos,dynamic: obj , d_lambda: d_lambda, steps_left: max_steps,path: vec![] ,phamtom  :  std::marker::PhantomData, final_color: None };
 
@@ -328,7 +339,7 @@ impl CollsionObject for Skybox {
 
         if r > self.radius {
 
-            let [cart_coor,cart_mom] = curved_space::spher_to_cart( &[new[1],new[2],new[3]] , & [momentum[1],momentum[2],momentum[3]]);
+            let [_,cart_mom] = curved_space::spher_to_cart( &[new[1],new[2],new[3]] , & [momentum[1],momentum[2],momentum[3]]);
 
             let mom_r = (cart_mom[0].powi(2) + cart_mom[1].powi(2)+cart_mom[2].powi(2)).sqrt();
 

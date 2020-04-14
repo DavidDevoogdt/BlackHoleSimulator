@@ -125,12 +125,30 @@ pub fn new<'a,  T: curved_space::Metric<'a> > ( camera: Camera,objects:  &'a Vec
     let dheigth = camera.height/ (camera.y_res as f64);
     let dwidth = camera.width/ (camera.x_res as f64);
 
-    let theta_x = (theta.cos()*phi.cos())*( dheigth )    ;
-    let theta_y = (theta.cos()*phi.sin())*( dheigth );
-    let theta_z = (-theta.sin())*( dheigth );
+    let mut alpha_x = theta.cos()*phi.cos()    ;
+    let mut alpha_y = theta.cos()*phi.sin();
+    let mut alpha_z = -theta.sin();
 
-    let phi_x = (-phi.sin())*( dwidth );
-    let phi_y = (phi.cos())*( dwidth );
+    let mut  beta_x = -phi.sin();
+    let mut  beta_y = phi.cos();
+
+    let alpha_norm =  (alpha_x .powi(2)+alpha_y .powi(2)+alpha_z .powi(2)).sqrt();
+    let beta_norm =  (beta_x .powi(2)+beta_y .powi(2)).sqrt();
+
+    alpha_x /= alpha_norm;
+    alpha_y /= alpha_norm;
+    alpha_z /= alpha_norm;
+
+    beta_x /= beta_norm ;
+    beta_y /= beta_norm ;
+
+    let theta_x = (alpha_x*camera.rotation_angle.cos() + beta_x*camera.rotation_angle.sin())*(dheigth);
+    let theta_y = (alpha_y*camera.rotation_angle.cos() + beta_y*camera.rotation_angle.sin())*(dheigth);
+    let theta_z = (alpha_z*camera.rotation_angle.cos())*(dheigth);
+
+    let phi_x = (alpha_x*(-camera.rotation_angle.sin()) + beta_x*camera.rotation_angle.cos())*(dwidth);
+    let phi_y = (alpha_y*(-camera.rotation_angle.sin()) + beta_y*camera.rotation_angle.cos())*(dwidth);
+    let phi_z = (alpha_z*(-camera.rotation_angle.sin()))*(dwidth);
 
     //let r2 =  (camera.direction[1].powi(2) + camera.direction[2].powi(2) ).sqrt();
 
@@ -152,7 +170,7 @@ pub fn new<'a,  T: curved_space::Metric<'a> > ( camera: Camera,objects:  &'a Vec
 
             let px = x_dir + th* theta_x+ ph*phi_x;
             let py = y_dir + th* theta_y+ ph*phi_y;
-            let pz = z_dir + th* theta_z;
+            let pz = z_dir + th* theta_z+ ph*phi_z;
 
             let norm =  (px.powi(2)+py.powi(2)+pz.powi(2)).sqrt();
 
@@ -180,6 +198,7 @@ pub struct Camera {
     pub distance: f64,
     pub height : f64,
     pub width : f64,
+    pub rotation_angle: f64,
 }
 
 

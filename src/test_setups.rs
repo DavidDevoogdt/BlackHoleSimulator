@@ -79,11 +79,12 @@ pub fn ray_trace_schwarzshild(){
     let camera = ray_tracer::Camera{ 
         pos : [ -8.0,0.0,1.0],
         direction : [1.0,0.0,-0.125],
-        x_res : 320,
+        x_res : 180,
         y_res : 180,
         distance: 0.1,
         width: 0.16,
-        height : 0.09,
+        height : 0.16,
+        rotation_angle :22.5/360.0*(2.0*std::f64::consts::PI),
         };
 
     let black_sphere = ray_tracer::Sphere{
@@ -152,7 +153,9 @@ pub fn ray_trace_minkowski(){
         y_res : 200,
         distance: 0.3,
         height : 0.3,
-        width: 0.3 };
+        width: 0.3,
+        rotation_angle :0.0,
+     };
 
 
     let colored_sphere = ray_tracer::SphereCart{

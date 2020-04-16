@@ -34,16 +34,15 @@ impl<'a,T: curved_space::Metric<'a>  > RayTracer<'a,T> {
             //println!("hello from {}", photon.steps_left );
             let mut steps_taken : u8 = 0; 
             'outer: while photon.steps_left > 0 {
-                 photon.steps_left -=1;
+                photon.steps_left -=1;
 
-                photon.dynamic.take_step( photon.d_lambda );
+                let err = photon.dynamic.take_step( photon.d_lambda );
+
+                //println!("{}",err);
+
                 steps_taken +=1;
 
-                
-
                 if steps_taken == steps_per_collision_detection {
-                    
-                    
                     photon.dynamic.sanitize_coordinates();
 
                     let [coord,mom] = photon.dynamic.get_coordinates_and_momenta();
@@ -142,13 +141,13 @@ pub fn new<'a,  T: curved_space::Metric<'a> > ( camera: Camera,objects:  &'a Vec
     beta_x /= beta_norm ;
     beta_y /= beta_norm ;
 
-    let theta_x = (alpha_x*camera.rotation_angle.cos() + beta_x*camera.rotation_angle.sin())*(dheigth);
-    let theta_y = (alpha_y*camera.rotation_angle.cos() + beta_y*camera.rotation_angle.sin())*(dheigth);
+    let theta_x = (alpha_x*camera.rotation_angle.cos() - beta_x*camera.rotation_angle.sin())*(dheigth);
+    let theta_y = (alpha_y*camera.rotation_angle.cos() - beta_y*camera.rotation_angle.sin())*(dheigth);
     let theta_z = (alpha_z*camera.rotation_angle.cos())*(dheigth);
 
-    let phi_x = (alpha_x*(-camera.rotation_angle.sin()) + beta_x*camera.rotation_angle.cos())*(dwidth);
-    let phi_y = (alpha_y*(-camera.rotation_angle.sin()) + beta_y*camera.rotation_angle.cos())*(dwidth);
-    let phi_z = (alpha_z*(-camera.rotation_angle.sin()))*(dwidth);
+    let phi_x = (alpha_x*(camera.rotation_angle.sin()) + beta_x*camera.rotation_angle.cos())*(dwidth);
+    let phi_y = (alpha_y*(camera.rotation_angle.sin()) + beta_y*camera.rotation_angle.cos())*(dwidth);
+    let phi_z = (alpha_z*(camera.rotation_angle.sin()))*(dwidth);
 
     //let r2 =  (camera.direction[1].powi(2) + camera.direction[2].powi(2) ).sqrt();
 
@@ -177,6 +176,8 @@ pub fn new<'a,  T: curved_space::Metric<'a> > ( camera: Camera,objects:  &'a Vec
 
             let obj  = metric.spawn_space_object_from_cartesian( [0.0, camera.pos[0],camera.pos[1],camera.pos[2] ] , [1.0, px/norm,  py/norm, pz/norm], 0.0 );
             
+            //println!("mom new photon {}",obj.contract_momentum()) ;
+
             let prev_pos = obj.get_coordinates_and_momenta()[0].clone();
 
             let p = Photon{ save_path: save_path, collision_object: objects ,prev_position : prev_pos,dynamic: obj , d_lambda: d_lambda, steps_left: max_steps,path: vec![] ,phantom  :  std::marker::PhantomData, final_color: None };

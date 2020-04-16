@@ -27,11 +27,12 @@ fn integrator(){
 
 ///// main definitions
 pub trait SpaceObject<'a>{
+
+    fn get_mass(&self)->f64;
+
     //fn get_metric(&self) -> &dyn Metric<SpecificSpaceObject = Self>;
     fn get_coordinates_patch(&self) -> &[f64;4];
     fn get_momenta_patch(&self) -> &[f64;4];
-
-
 
     fn get_mut_coordinates_patch(&mut self) -> &mut [f64;4];
     fn get_mut_momenta_patch(&mut self) -> &mut [f64;4];
@@ -39,24 +40,17 @@ pub trait SpaceObject<'a>{
     // for spherical coordinates, multiple patches could be useful
     fn sanitize_coordinates(&mut self);
 
-
-    fn get_coordinates_and_momenta(&self) -> [[f64;4];2] ;
-
-
-    //
+    fn get_coordinates_and_momenta(&self) -> [[f64;4];2];
     fn get_cartesian_coordinates_and_momenta(&self) -> [f64;8];
 
     // copy paste these implementations in the corresponding section 
     // reason: size of Self of metric is unknown for generic implementation due to associated type
 
-    fn get_contravariant_momenta (&self) -> [f64;4];
-    fn covariant_derivative (&self,index:i8, coor: & [f64;4],  vec :& [f64;4] ) ->  Box<dyn Fn(f64)->f64+ 'a>;
-
-    /*fn get_contravariant_momenta (&self) -> [f64;4]{
+    fn get_contravariant_momenta (&self) -> [f64;4];/*{
         self.get_metric().to_contra( self.get_coordinates(), self.get_momenta() )    
-    }
+    }*/
 
-    fn covariant_derivative (&'a self,index:i8, coor: &'a [f64;4],  vec :&'a [f64;4] ) ->  Box<dyn Fn(f64)->f64+ 'a>{
+    fn covariant_derivative (&self,index:u8, coor: & [f64;4],  vec :& [f64;4] ) ->  Box<dyn Fn(f64)->f64+ 'a>;/*{
         self.get_metric().covariant_derivative(index, coor,vec )
     }*/
    
@@ -67,31 +61,44 @@ pub trait SpaceObject<'a>{
 
         let mut sum = 0.0;
 
-        for i in 0..3 {
-            sum += p1[i] + p2[i];
+        for i in 0..4 {
+            sum += p1[i] * p2[i];
         }
-        return sum;
+        sum
     }
 
+    fn update_rk4(&mut self, indices: Box<[u8]>, copy_coor: &[f64;4], copy_mom: &[f64;4], d_lambda: f64 ){
+        for e in indices.iter(){
+            let dp =  self.covariant_derivative( *e, &copy_coor, &copy_mom  ) ;
+            let mut_mom = self.get_mut_momenta_patch();
+            rk4(dp, &mut mut_mom[ *e as usize ] , d_lambda);
+        }
 
-    fn take_step(&mut self, d_lambda : f64){
+
+    }
+
+    //momenta without associated killing vector field, should be integrated manually
+    fn get_rk4_momenta(&self ) -> &Box<[u8]>;
+
+
+    fn update_momenta_killing_symmetry(&mut self);
+
+    fn take_step(&mut self, d_lambda : f64)-> f64 {
 
         let copy_coor =   self.get_coordinates_patch().clone();
         let copy_mom =   self.get_momenta_patch().clone();
 
-        //closures for the RK4 integration based on geodesic equation  (Dp^mu/D tau = 0 for force free field)
-        let dp_r =  self.covariant_derivative(1, &copy_coor, &copy_mom  ) ;
-        let dp_h =  self.covariant_derivative(3, &copy_coor, &copy_mom  ) ;
-        let dp_t =  self.covariant_derivative(0, &copy_coor,&copy_mom  ) ;
-        let dp_p =  self.covariant_derivative(2, &copy_coor,&copy_mom   ) ;
+        let indices = self.get_rk4_momenta().clone();
 
-        let mut_mom = self.get_mut_momenta_patch();
+        //println!("{}",indices[2]);
 
-        //update the momenta 
-        rk4( dp_r, &mut mut_mom[1] , d_lambda);
-        rk4( dp_h, &mut mut_mom[3] , d_lambda);
-        rk4( dp_p, &mut mut_mom[2] , d_lambda);
-        rk4( dp_t, &mut mut_mom[0] , d_lambda);
+        //let indices = Box::new([0,1,2,3]);
+
+        self.update_rk4( indices , &copy_coor, &copy_mom, d_lambda  );
+
+
+        self.update_momenta_killing_symmetry();
+       
 
         let mut_coord = self.get_mut_coordinates_patch();
     
@@ -101,9 +108,17 @@ pub trait SpaceObject<'a>{
         rk4( |_| copy_mom[3], &mut mut_coord[3], d_lambda);
         rk4( |_| copy_mom[0], &mut mut_coord[0] , d_lambda);
 
-        //todo check for collision with target
-       
+        return (self.contract_momentum() - self.get_mass()).abs();
+    }
 
+    fn restore_coordinates(&mut self, coordinates: [f64;4], momenta: [f64;4]){
+        let coor = self.get_mut_coordinates_patch();
+        *coor = coordinates;
+
+        let mom = self.get_mut_momenta_patch();
+        *mom = momenta;
+
+        self.sanitize_coordinates();
     }
 }
 
@@ -111,15 +126,16 @@ pub trait SpaceObject<'a>{
 pub trait Metric<'a> : std::marker::Sync + std::marker::Send {
     type SpecificSpaceObject : SpaceObject<'a> + std::marker::Sync + std::marker::Send ;
 
-    fn get_christoffel (&self,x0: i8,x1: i8,x2: i8,coor: &[f64;4]) -> f64;
-    fn g_lower(&self, x0 :i8, x1 :i8,coor :&[f64;4]) -> f64;
+    fn get_christoffel (&self,x0: u8,x1: u8,x2: u8,coor: &[f64;4]) -> f64;
+    fn g_lower(&self, x0 :u8, x1 :u8,coor :&[f64;4]) -> f64;
 
     fn to_contra(&self, coordinates : &[f64;4] ,vec: &[f64;4]) -> [f64;4];
-    fn covariant_derivative (&self,index:i8, coor: & [f64;4],  vec :& [f64;4] ) ->  Box<dyn Fn(f64)->f64+ 'a>; // D x^mu/(D tau) = d x^mu/(d tau) + gamma^mu_alpha,beta x^alpha x^beta, this returns a closure |x^mu| gamma^mu_alpha,beta x^alpha x^beta 
+    fn covariant_derivative (&self,index:u8, coor: & [f64;4],  vec :& [f64;4] ) ->  Box<dyn Fn(f64)->f64+ 'a>; // D x^mu/(D tau) = d x^mu/(d tau) + gamma^mu_alpha,beta x^alpha x^beta, this returns a closure |x^mu| gamma^mu_alpha,beta x^alpha x^beta 
 
     fn spawn_space_object(&'a self, coordinates : [f64;4], momenta : [f64;4] , mass : f64 ) -> Self::SpecificSpaceObject;
     fn spawn_space_object_from_cartesian(&'a self, coordinates :[f64;4], momenta : [f64;4] , mass : f64) -> Self::SpecificSpaceObject;
 
+    fn get_rk4_momenta(&self)-> &Box<[u8]>;
 }
 
 ////////////////////implementation of the schwarzschildmetric
@@ -127,12 +143,17 @@ pub trait Metric<'a> : std::marker::Sync + std::marker::Send {
 //t,r,phi,theta
 pub struct SchwarzschildMetric {
     pub r_s : f64,
+    pub rk4_momenta: Box<[u8]>,
+}
+
+pub fn new_schwarzschild_metric(r_s:f64) -> SchwarzschildMetric {
+    SchwarzschildMetric{r_s: r_s, rk4_momenta: Box::new( [0,2])}
 }
 
 impl<'a> Metric<'a> for SchwarzschildMetric {
     type SpecificSpaceObject= SchwarzschildObject<'a>;
 
-    fn get_christoffel (&self,x0: i8,x1: i8,x2: i8,coor: &[f64;4]) -> f64{
+    fn get_christoffel (&self,x0: u8,x1: u8,x2: u8,coor: &[f64;4]) -> f64{
         match (x0,x1,x2){
             (0,1,0 ) => self.r_s/ (2.0*coor[1]*(coor[1]-self.r_s)),
             (0,0,0) => -self.r_s/ (2.0*coor[1]*(coor[1]-self.r_s)),
@@ -147,12 +168,12 @@ impl<'a> Metric<'a> for SchwarzschildMetric {
         }
     }
 
-    fn g_lower(&self, x0 :i8, x1 :i8,coor :&[f64;4]) -> f64{
+    fn g_lower(&self, x0 :u8, x1 :u8,coor :&[f64;4]) -> f64{
         match (x0,x1) {
-            (0,0) => -(1.0 - self.r_s/coor[ 1 ] ),
-            (1,1) => 1.0/(1.0 - self.r_s/coor[ 1 ] ),
-            (2,2) => coor[1].powi(2),
-            (3,3) => (coor[1] * coor[3].sin()  ).powi(2),
+            (0,0) => (1.0 - self.r_s/coor[ 1 ] ),
+            (1,1) => -1.0/(1.0 - self.r_s/coor[ 1 ] ),
+            (2,2) => -(coor[1] * coor[3].sin()  ).powi(2),
+            (3,3) => -coor[1].powi(2),
             __ => 0.0,
         }
     }
@@ -162,7 +183,7 @@ impl<'a> Metric<'a> for SchwarzschildMetric {
     }
 
     // D x^mu/(D tau) = d x^mu/(d tau) + gamma^mu_alpha,beta x^alpha x^beta, this returns a closure |x^mu| gamma^mu_alpha,beta x^alpha x^beta 
-    fn covariant_derivative (&self,index:i8, coor: & [f64;4], vect :& [f64;4]  ) ->  Box<dyn Fn(f64)->f64+ 'a>{
+    fn covariant_derivative (&self,index:u8, coor: & [f64;4], vect :& [f64;4]  ) ->  Box<dyn Fn(f64)->f64+ 'a>{
 
         let vec = vect.clone();
 
@@ -193,22 +214,15 @@ impl<'a> Metric<'a> for SchwarzschildMetric {
     } 
 
     fn spawn_space_object(&'a self ,coordinates : [f64;4], momenta : [f64;4] , mass : f64 ) -> Self::SpecificSpaceObject{ 
-        let mut  res = SchwarzschildObject{ patch_coordinates : coordinates, patch_momenta: momenta, _mass: mass, metric: &self, coordinate_patch: 0, theta_threshold: 0.6*std::f64::consts::PI/2.0 };
-        
+        let mut  res = SchwarzschildObject{ patch_coordinates : coordinates, patch_momenta: momenta, mass: mass, metric: &self, coordinate_patch: 0, theta_threshold: 0.5*std::f64::consts::PI/2.0, killing_const: [ 0.0, 0.0 ], };        
         res.sanitize_coordinates();
-
+        res.reset_killing_const();
+        
         res
     }
 
-
-
     fn spawn_space_object_from_cartesian( &'a self ,coordinates :[f64;4], momenta : [f64;4] , mass : f64) -> Self::SpecificSpaceObject{
-
-        //println!("spawning {}{}{}{}",coordinates[0],coordinates[1],coordinates[2],coordinates[3]);
-
         let [coor,mom] = cart_to_spher(   &[coordinates[1],coordinates[2],coordinates[3]] ,  &[momenta[1],momenta[2],momenta[3]] );
-
-        //println!("new pos {};{};{};",coor[0],coor[1],coor[2]);
 
         let newpos = [
             coordinates[0],
@@ -216,18 +230,29 @@ impl<'a> Metric<'a> for SchwarzschildMetric {
             coor[1],
             coor[2]
         ];
+        let p_t = ( mass.powi(2) -(mom[0].powi(2)*self.g_lower(1,1,&newpos) +mom[1].powi(2)*self.g_lower(2,2,&newpos)+mom[2].powi(2)*self.g_lower(3,3,&newpos))/( self.g_lower(0,0,&newpos) )  ).sqrt();
 
         let newmom =  [ 
-            momenta[0], //todo infer this momentum from energy mass relation
+            p_t, //todo infer this momentum from energy mass relation
             mom[0],
             mom[1],
             mom[2]
         ];
 
-
         self.spawn_space_object( newpos , newmom, mass)
-
     }
+
+    fn get_rk4_momenta(&self)->&Box<[u8]>{
+        &self.rk4_momenta
+    }
+}
+
+impl SchwarzschildMetric {
+
+    fn g_upper(&self, x0 :u8, x1 :u8,coor :&[f64;4]) -> f64{
+        1.0/self.g_lower(x0,x1,coor) 
+    }
+
 }
 
 //implementation of a object living in a schwarzschildmetric
@@ -240,25 +265,26 @@ pub struct SchwarzschildObject <'a> {
     patch_coordinates : [f64;4],
     patch_momenta :  [f64;4],
     metric: &'a SchwarzschildMetric,
-    _mass : f64,
+    mass : f64,
     coordinate_patch: u8, 
     theta_threshold: f64,
+    killing_const: [f64;2],
 }
 
 impl<'a> SpaceObject<'a> for SchwarzschildObject<'a>{
 
-    // fn get_metric(& self) -> & dyn Metric<SpecificSpaceObject = SchwarzschildObject > {
-    //     self.metric as & dyn Metric<SpecificSpaceObject = SchwarzschildObject >       
-    // }
     fn get_coordinates_patch(&self) -> &[f64;4]{
         &self.patch_coordinates
     }
+
     fn get_momenta_patch(&self) -> &[f64;4]{
         &self.patch_momenta
     }
+
     fn get_mut_coordinates_patch(&mut self) -> &mut [f64;4]{
         &mut self.patch_coordinates
     }
+
     fn get_mut_momenta_patch(&mut self) -> &mut [f64;4]{
         &mut self.patch_momenta
     }
@@ -275,17 +301,13 @@ impl<'a> SpaceObject<'a> for SchwarzschildObject<'a>{
             },
             _=> panic!("invalid patch state")
         }
-
-     
     }
-
-  
 
     fn get_contravariant_momenta (&self) -> [f64;4]{
         self.metric.to_contra( self.get_coordinates_patch(), self.get_momenta_patch() )    
     }
 
-    fn covariant_derivative (& self,index:i8, coor: & [f64;4],  vec :& [f64;4] ) ->  Box<dyn Fn(f64)->f64+ 'a>{
+    fn covariant_derivative (& self,index:u8, coor: & [f64;4],  vec :& [f64;4] ) ->  Box<dyn Fn(f64)->f64+ 'a>{
         self.metric.covariant_derivative(index, coor,vec )
     }
 
@@ -319,6 +341,27 @@ impl<'a> SpaceObject<'a> for SchwarzschildObject<'a>{
             
             self.switch_patch();
         }
+    }
+
+    fn get_mass(&self)->f64{
+        self.mass
+    }
+
+    fn get_rk4_momenta(&self) -> &Box<[u8]> {
+        &self.metric.get_rk4_momenta()
+    }
+
+    fn update_momenta_killing_symmetry(&mut self){
+        //in schwarzschild metric: not explicitly dependend upon: t and phi =>d/d lambda (k_t^mu p_mu) =0 and   d/d lambda (k_phi^mu p_mu) =0 
+        
+        let c0 =  self.killing_const[0]*self.metric.g_upper(0,0, self.get_coordinates_patch());
+        let c2 = self.killing_const[1]*self.metric.g_upper(2,2, self.get_coordinates_patch());
+
+        let mut_mom = self.get_mut_momenta_patch();
+
+        mut_mom[0] = c0;
+        mut_mom[2] = c2;
+
     }
 }
 
@@ -361,8 +404,15 @@ impl<'a> SchwarzschildObject<'a>{
         mut_mom[3] =  mom[2];
 
         self.coordinate_patch = (self.coordinate_patch + 1)%2;
+
+        self.reset_killing_const();
     }
 
+    fn reset_killing_const(&mut self){
+        let mom = self.get_momenta_patch();
+        self.killing_const = [ mom[0]*self.metric.g_lower(0,0,self.get_coordinates_patch()) , mom[2]*self.metric.g_lower(2,2,self.get_coordinates_patch())  ]
+        //self.killing_const = [ mom[0] , mom[2]  ]
+    }
 }
 
 
@@ -373,16 +423,22 @@ impl<'a> SchwarzschildObject<'a>{
 
 //t,x,y,z
 pub struct MinkowskiMetric {
+    rk4_momenta : Box<[u8]>,
 }
+
+pub fn new_minkowski_metric() -> MinkowskiMetric {
+    MinkowskiMetric{rk4_momenta: Box::new([0,2]) }
+}
+
 
 impl<'a> Metric<'a> for MinkowskiMetric {
     type SpecificSpaceObject= MinkowskiObject<'a>;
 
-    fn get_christoffel (&self,_: i8,_: i8,_ :i8,_: &[f64;4]) -> f64{
+    fn get_christoffel (&self,_: u8,_: u8,_ :u8,_: &[f64;4]) -> f64{
         return  0.0;
     }
 
-    fn g_lower(&self, x0 :i8, x1 :i8,_ :&[f64;4]) -> f64{
+    fn g_lower(&self, x0 :u8, x1 :u8,_ :&[f64;4]) -> f64{
         match (x0,x1) {
             (0,0) => 1.0 ,
             (1,1) => -1.0,
@@ -397,16 +453,20 @@ impl<'a> Metric<'a> for MinkowskiMetric {
     }
 
     // D x^mu/(D tau) = d x^mu/(d tau) + gamma^mu_alpha,beta x^alpha x^beta, this returns a closure |x^mu| gamma^mu_alpha,beta x^alpha x^beta 
-    fn covariant_derivative (&self,_:i8, _: & [f64;4], _:& [f64;4]  ) ->  Box<dyn Fn(f64)->f64+ 'a>{
+    fn covariant_derivative (&self,_:u8, _: & [f64;4], _:& [f64;4]  ) ->  Box<dyn Fn(f64)->f64+ 'a>{
          Box::new( move |_: f64| -> f64 { 0.0})
     } 
 
     fn spawn_space_object(&'a self ,coordinates : [f64;4], momenta : [f64;4] , mass : f64 ) -> Self::SpecificSpaceObject{ 
-        MinkowskiObject{ coordinates : coordinates, momenta: momenta, _mass: mass, metric: &self }
+        MinkowskiObject{ coordinates : coordinates, momenta: momenta, mass: mass, metric: &self }
     }
 
     fn spawn_space_object_from_cartesian( &'a self ,coordinates :[f64;4], momenta : [f64;4] , mass : f64) -> Self::SpecificSpaceObject{
         self.spawn_space_object( coordinates , momenta, mass)
+    }
+
+    fn get_rk4_momenta(&self)->&Box<[u8]>{
+        &self.rk4_momenta
     }
 }
 
@@ -416,11 +476,14 @@ pub struct MinkowskiObject <'a> {
     coordinates : [f64;4],
     momenta :  [f64;4],
     metric: &'a MinkowskiMetric,
-    _mass : f64,
+    mass : f64,
 }
 
 impl<'a> SpaceObject<'a> for MinkowskiObject<'a>{
 
+    fn get_mass(&self)->f64{
+        self.mass
+    }
     fn get_coordinates_patch(&self) -> &[f64;4]{
         &self.coordinates
     }
@@ -442,7 +505,7 @@ impl<'a> SpaceObject<'a> for MinkowskiObject<'a>{
         self.metric.to_contra( self.get_coordinates_patch(), self.get_momenta_patch() )    
     }
 
-    fn covariant_derivative (& self,index:i8, coor: & [f64;4],  vec :& [f64;4] ) ->  Box<dyn Fn(f64)->f64+ 'a>{
+    fn covariant_derivative (& self,index:u8, coor: & [f64;4],  vec :& [f64;4] ) ->  Box<dyn Fn(f64)->f64+ 'a>{
         self.metric.covariant_derivative(index, coor,vec )
     }
 
@@ -456,6 +519,14 @@ impl<'a> SpaceObject<'a> for MinkowskiObject<'a>{
 
     fn sanitize_coordinates(&mut self) {
 
+    }
+
+    fn get_rk4_momenta(&self) -> &Box<[u8]> {
+        &self.metric.get_rk4_momenta()
+    }
+
+    fn update_momenta_killing_symmetry(&mut self){
+        //in minkowski, all momenta are conserved in metric, but not interesting enough to implement...
     }
 }
 
@@ -499,10 +570,10 @@ pub fn cart_to_spher (coordinates: &[f64;3], momenta: &[f64;3]) -> [ [f64;3];2] 
 
     let r2 =  (coordinates[0].powi(2) + coordinates[1].powi(2) ).sqrt();
 
-    // let pc = coordinates[0]/r2;
-    // let ps = coordinates[1]/r2;
-    // let hc = coordinates[2]/r;
-    // let hs = r2 /r;
+    //let pc = coordinates[0]/r2;
+    //let ps = coordinates[1]/r2;
+    //let hc = coordinates[2]/r;
+    //let hs = r2 /r;
 
     let pc = phi.cos();
     let ps = phi.sin();

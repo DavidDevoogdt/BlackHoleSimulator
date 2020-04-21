@@ -29,51 +29,73 @@ pub struct RayTracer<'a,T: curved_space::Metric<'a>  > {
 
 impl<'a,T: curved_space::Metric<'a>  > RayTracer<'a,T> {
    
-    pub fn run_simulation(& mut self, steps_per_collision_detection: u8){
+    pub fn run_simulation(& mut self, steps_per_collision_detection: u8, max_tolerance: f64){
         self.photons.par_iter_mut().progress_count( (self.camera.x_res*self.camera.y_res) as u64 ).for_each(|photon| {
             //println!("hello from {}", photon.steps_left );
+
             let mut steps_taken : u8 = 0; 
             'outer: while photon.steps_left > 0 {
                 photon.steps_left -=1;
 
-                let err = photon.dynamic.take_step( photon.d_lambda );
+                let d_lambda = photon.dynamic.estimate_d_lambda();
 
-                //println!("{}",err);
+                let new_err = photon.dynamic.take_step( d_lambda );
 
-                steps_taken +=1;
 
-                if steps_taken == steps_per_collision_detection {
-                    photon.dynamic.sanitize_coordinates();
+                if new_err < max_tolerance {
 
-                    let [coord,mom] = photon.dynamic.get_coordinates_and_momenta();
+                    steps_taken +=1;
 
-                     for obj in photon.collision_object.iter() {
-                        match  obj.detect_collision(&photon.prev_position,&coord,&mom   ) {
-                            Some(x) => {
-                                //println!("photon colided");
-                                photon.final_color = Some(x); //todo account for redshift
-                                photon.steps_left=0;
-                                break 'outer;
-                            },
-                            None => { },
+                    if steps_taken == steps_per_collision_detection {
+                        photon.dynamic.sanitize_coordinates();
+
+                        let [coord,mom] = photon.dynamic.get_coordinates_and_momenta();
+
+                        for obj in photon.collision_object.iter() {
+                            match  obj.detect_collision(&photon.prev_position,&coord,&mom   ) {
+                                Some(x) => {
+                                    //println!("photon colided");
+                                    photon.final_color = Some(x); //todo account for redshift
+                                    photon.steps_left=0;
+                                    break 'outer;
+                                },
+                                None => { },
+                            }
                         }
-                     }
 
-                     photon.prev_position = coord;
+                        photon.prev_position = mom;
 
-                     steps_taken = 0;
-                 }
+                        photon.backup_pos_patch = photon.dynamic.get_coordinates_patch().clone();
+                        photon.backup_momentum_patch = photon.dynamic.get_momenta_patch().clone();
+                        photon.backup_patch = photon.dynamic.get_patch();
 
-                if photon.save_path {
-                   photon.path.push(  photon.dynamic.get_cartesian_coordinates_and_momenta() );  
-                }
+
+                        steps_taken = 0;
+                    }
+
+                    if photon.save_path {
+                    photon.path.push(  photon.dynamic.get_cartesian_coordinates_and_momenta() );  
+                    }
+                }else{
+                    //print!("d_lambda {:.4}  err{:.4} steps left {} ",d_lambda,new_err,photon.steps_left );
+                    //photon.dynamic.print();
+
+                    photon.final_color = Some(image::Rgb([255,0,255])); //todo account for redshift
+                    photon.steps_left=0;
+                    break 'outer;
+
+                    // photon.dynamic.restore_coordinates( photon.backup_pos_patch, photon.backup_momentum_patch, photon.backup_patch);
+                    // photon.steps_left += steps_taken as i32;
+                    // steps_taken = 0;
+                    // photon.d_lambda *= 0.9;
+                }      
             }
         });
 
     }
     
 
-    pub fn plot_paths( &self) {
+    pub fn plot_paths( &self, mode: &str) {
         if self.save_path {
 
             for (i,photon) in self.photons.iter().enumerate() {
@@ -86,7 +108,7 @@ impl<'a,T: curved_space::Metric<'a>  > RayTracer<'a,T> {
 
             println!("plotting {} photons in python", num);
 
-            python_interface::launch_python( num , "xyz")
+            python_interface::launch_python( num , mode)
 
         }
     }
@@ -96,7 +118,10 @@ impl<'a,T: curved_space::Metric<'a>  > RayTracer<'a,T> {
         for x in 0..(self.camera.x_res as u32) {
             for y in 0..(self.camera.y_res as u32){
                 //println!(" x:{} y:{}",x,y);
-                let color =  match self.photons[ (y+x*(self.camera.y_res as u32))  as usize].final_color {
+
+                let photon = &self.photons[ (y+x*(self.camera.y_res as u32))  as usize];
+
+                let color =  match photon.final_color {
                     None => image::Rgb([0,255,0]),
                     Some(x) =>x, 
                 } ;
@@ -115,7 +140,7 @@ impl<'a,T: curved_space::Metric<'a>  > RayTracer<'a,T> {
 
 
 //This creates the initial photons for the chosen metric and associated space object
-pub fn new<'a,  T: curved_space::Metric<'a> > ( camera: Camera,objects:  &'a Vec< Box< dyn CollsionObject> >,metric : &'a T, max_steps : i32 ,save_path : bool, d_lambda: f64 ) -> RayTracer<'a,T> {
+pub fn new<'a,  T: curved_space::Metric<'a> > ( camera: Camera,objects:  &'a Vec< Box< dyn CollsionObject> >,metric : &'a T, max_steps : i32 ,save_path : bool) -> RayTracer<'a,T> {
     let r =  (camera.direction[0].powi(2)+camera.direction[1].powi(2)+camera.direction[2].powi(2)).sqrt();
 
     let theta = (camera.direction[2]/r).acos();
@@ -173,14 +198,30 @@ pub fn new<'a,  T: curved_space::Metric<'a> > ( camera: Camera,objects:  &'a Vec
 
             let norm =  (px.powi(2)+py.powi(2)+pz.powi(2)).sqrt();
 
+            let pos = [0.0, camera.pos[0],camera.pos[1],camera.pos[2] ];
 
-            let obj  = metric.spawn_space_object_from_cartesian( [0.0, camera.pos[0],camera.pos[1],camera.pos[2] ] , [1.0, px/norm,  py/norm, pz/norm], 0.0 );
+            let obj  = metric.spawn_space_object_from_cartesian( pos , [1.0, px/norm,  py/norm, pz/norm], 0.0 );
             
             //println!("mom new photon {}",obj.contract_momentum()) ;
+            let backup_pos_patch = obj.get_coordinates_patch().clone();
+            let backup_momentum_patch = obj.get_momenta_patch().clone();
+            let backup_patch = obj.get_patch();
 
-            let prev_pos = obj.get_coordinates_and_momenta()[0].clone();
 
-            let p = Photon{ save_path: save_path, collision_object: objects ,prev_position : prev_pos,dynamic: obj , d_lambda: d_lambda, steps_left: max_steps,path: vec![] ,phantom  :  std::marker::PhantomData, final_color: None };
+
+            let p = Photon{ 
+                save_path: save_path,
+                collision_object: objects ,
+                prev_position : pos,
+                dynamic: obj,
+                backup_pos_patch: backup_pos_patch,
+                backup_momentum_patch: backup_momentum_patch,
+                backup_patch: backup_patch,
+                steps_left: max_steps,
+                path: vec![] ,
+                phantom  :  std::marker::PhantomData,
+                final_color: None
+            };
 
             photon_array.push( p) ;
         }
@@ -419,7 +460,9 @@ impl CollsionObject for SkyboxCart {
 pub struct Photon< 'a, T: curved_space::SpaceObject<'a> + std::marker::Send + std::marker::Sync >  {
     dynamic : T,
     prev_position :  [f64;4],
-    d_lambda : f64,
+    backup_pos_patch :  [f64;4],
+    backup_momentum_patch :  [f64;4],
+    backup_patch: u8,
     steps_left: i32,
     phantom : std::marker::PhantomData<&'a T>,
     final_color : Option< image::Rgb<u8> >,

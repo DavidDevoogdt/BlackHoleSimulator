@@ -1,5 +1,4 @@
 
-
 // Helper objects 
 
 /// integrate equation dy/dt = f(t,y) over a time step dt and store result in orig params
@@ -39,7 +38,7 @@ pub trait SpaceObject<'a>{
 
     // for spherical coordinates, multiple patches could be useful
     fn sanitize_coordinates(&mut self);
-
+    
     fn get_coordinates_and_momenta(&self) -> [[f64;4];2];
     fn get_cartesian_coordinates_and_momenta(&self) -> [f64;8];
 
@@ -54,6 +53,7 @@ pub trait SpaceObject<'a>{
         self.get_metric().covariant_derivative(index, coor,vec )
     }*/
    
+    fn estimate_d_lambda(&self)-> f64;
     
     fn contract_momentum(&self ) -> f64{
         let p1 = self.get_momenta_patch();
@@ -73,55 +73,60 @@ pub trait SpaceObject<'a>{
             let mut_mom = self.get_mut_momenta_patch();
             rk4(dp, &mut mut_mom[ *e as usize ] , d_lambda);
         }
-
-
     }
 
     //momenta without associated killing vector field, should be integrated manually
     fn get_rk4_momenta(&self ) -> &Box<[u8]>;
 
 
-    fn update_momenta_killing_symmetry(&mut self);
+    fn update_momenta_killing_symmetry(&mut self)->f64;
 
     fn take_step(&mut self, d_lambda : f64)-> f64 {
-
-        let copy_coor =   self.get_coordinates_patch().clone();
+        ///// update cordinates
         let copy_mom =   self.get_momenta_patch().clone();
-
-        let indices = self.get_rk4_momenta().clone();
-
-        //println!("{}",indices[2]);
-
-        //let indices = Box::new([0,1,2,3]);
-
-        self.update_rk4( indices , &copy_coor, &copy_mom, d_lambda  );
-
-
-        self.update_momenta_killing_symmetry();
-       
-
         let mut_coord = self.get_mut_coordinates_patch();
-    
-        //update coordinates
+
         rk4( |_| copy_mom[1], &mut mut_coord[1] , d_lambda);
         rk4( |_| copy_mom[2], &mut mut_coord[2] , d_lambda);
         rk4( |_| copy_mom[3], &mut mut_coord[3], d_lambda);
         rk4( |_| copy_mom[0], &mut mut_coord[0] , d_lambda);
 
-        return (self.contract_momentum() - self.get_mass()).abs();
+
+        //// update momenta
+        let indices = self.get_rk4_momenta().clone();
+        let copy_coor =   self.get_coordinates_patch().clone();
+
+        self.update_rk4(indices,&copy_coor,&copy_mom, d_lambda);
+        self.update_momenta_killing_symmetry();
+       
+
+        return self.get_error_estimate();
     }
 
-    fn restore_coordinates(&mut self, coordinates: [f64;4], momenta: [f64;4]){
+    fn restore_coordinates(&mut self, coordinates: [f64;4], momenta: [f64;4], patch: u8){
         let coor = self.get_mut_coordinates_patch();
         *coor = coordinates;
 
         let mom = self.get_mut_momenta_patch();
         *mom = momenta;
 
+        self.set_patch(patch);
+
         self.sanitize_coordinates();
     }
-}
 
+    fn get_patch(&self)->u8;
+
+    fn set_patch(&mut self, patch: u8);
+
+    fn get_error_estimate(&self)->f64;
+
+    fn print(&self){
+        let [coor,mom] = self.get_coordinates_and_momenta();
+        println!("coord: [{:.5},{:.5},{:.5},{:.5}] mom:[{:.5},{:.5},{:.5},{:.5}]", coor[0],coor[1],coor[2],coor[3],mom[0],mom[1],mom[2],mom[3])
+    }
+
+}
 
 pub trait Metric<'a> : std::marker::Sync + std::marker::Send {
     type SpecificSpaceObject : SpaceObject<'a> + std::marker::Sync + std::marker::Send ;
@@ -144,10 +149,12 @@ pub trait Metric<'a> : std::marker::Sync + std::marker::Send {
 pub struct SchwarzschildMetric {
     pub r_s : f64,
     pub rk4_momenta: Box<[u8]>,
+    pub Delta: f64,
+    pub max_step : f64,
 }
 
-pub fn new_schwarzschild_metric(r_s:f64) -> SchwarzschildMetric {
-    SchwarzschildMetric{r_s: r_s, rk4_momenta: Box::new( [0,2])}
+pub fn new_schwarzschild_metric(r_s:f64, Delta:f64, max_step: f64) -> SchwarzschildMetric {
+    SchwarzschildMetric{r_s: r_s, rk4_momenta: Box::new( [0,2]), Delta:Delta, max_step: max_step}
 }
 
 impl<'a> Metric<'a> for SchwarzschildMetric {
@@ -213,11 +220,11 @@ impl<'a> Metric<'a> for SchwarzschildMetric {
         }
     } 
 
-    fn spawn_space_object(&'a self ,coordinates : [f64;4], momenta : [f64;4] , mass : f64 ) -> Self::SpecificSpaceObject{ 
-        let mut  res = SchwarzschildObject{ patch_coordinates : coordinates, patch_momenta: momenta, mass: mass, metric: &self, coordinate_patch: 0, theta_threshold: 0.5*std::f64::consts::PI/2.0, killing_const: [ 0.0, 0.0 ], };        
+    fn spawn_space_object(&'a self ,coordinates : [f64;4], momenta : [f64;4] , mass : f64) -> Self::SpecificSpaceObject{ 
+        let mut  res = SchwarzschildObject{   patch_coordinates : coordinates, patch_momenta: momenta, mass: mass, metric: &self, coordinate_patch: 0, theta_threshold: 0.5*std::f64::consts::PI/2.0, killing_const: [ 0.0, 0.0 ], };        
         res.sanitize_coordinates();
         res.reset_killing_const();
-        
+
         res
     }
 
@@ -334,13 +341,30 @@ impl<'a> SpaceObject<'a> for SchwarzschildObject<'a>{
     }
 
     fn sanitize_coordinates(&mut self) {
-        self.patch_coordinates[2] = self.patch_coordinates[2]%(std::f64::consts::PI*2.0);
+        
+        let mut mut_coor = self.patch_coordinates;
+        let mut mut_mom = self.patch_momenta;
+
+        if mut_coor[3] < 0.0 {
+            mut_coor[3]   *= -1.0 ;
+            mut_mom[3] *= -1.0;
+            mut_coor[2] -= std::f64::consts::PI;
+
+        } else if mut_coor[3] >std::f64::consts::PI {
+            mut_coor[3]  = 2.0*std::f64::consts::PI -  mut_coor[3];
+            mut_mom[3] *= -1.0;
+            mut_coor[2] += std::f64::consts::PI;
+
+            //self.reset_killing_const();
+        }
+
+        //self.patch_coordinates[2] = self.patch_coordinates[2]%(std::f64::consts::PI*2.0);
 
         //x,y,z -> yzx
-        if  (std::f64::consts::PI/2.0 - self.patch_coordinates[3]).abs() > self.theta_threshold {
+        // if  (std::f64::consts::PI/2.0 - self.patch_coordinates[3]).abs() > self.theta_threshold {
             
-            self.switch_patch();
-        }
+        //     //self.switch_patch();
+        // }
     }
 
     fn get_mass(&self)->f64{
@@ -351,17 +375,75 @@ impl<'a> SpaceObject<'a> for SchwarzschildObject<'a>{
         &self.metric.get_rk4_momenta()
     }
 
-    fn update_momenta_killing_symmetry(&mut self){
+    fn update_momenta_killing_symmetry(&mut self) -> f64 {
         //in schwarzschild metric: not explicitly dependend upon: t and phi =>d/d lambda (k_t^mu p_mu) =0 and   d/d lambda (k_phi^mu p_mu) =0 
-        
-        let c0 =  self.killing_const[0]*self.metric.g_upper(0,0, self.get_coordinates_patch());
-        let c2 = self.killing_const[1]*self.metric.g_upper(2,2, self.get_coordinates_patch());
+        let coor = self.get_coordinates_patch().clone();
 
+        let g00 = self.metric.g_upper(0,0, &coor );
+        let g22 = self.metric.g_upper(2,2, &coor);
+
+        let [e,l] = self.killing_const.clone(); // E,L,C
+
+       
         let mut_mom = self.get_mut_momenta_patch();
 
+        let c0 = e*g00;
+        let c2 = l*g22;
+
+       
         mut_mom[0] = c0;
         mut_mom[2] = c2;
 
+
+        0.0
+    }
+
+    fn get_patch(&self)->u8{
+        self.coordinate_patch
+    }
+
+    fn set_patch(&mut self, patch: u8){
+        self.coordinate_patch = patch;
+    }
+
+    //got estimate from https://arxiv.org/pdf/1303.5057.pdf
+
+    fn get_error_estimate(&self)->f64{
+        let metr = self.metric;
+        let mom = self.patch_momenta;
+        let coor =  self.get_coordinates_patch();
+
+        let xi=(metr.g_lower(1,1,coor)* mom[1].powi(2)+
+                metr.g_lower(2,2, coor)* mom[2].powi(2)+
+                metr.g_lower(3,3, coor)* mom[3].powi(2))/
+               (metr.g_lower(0,0, coor)* mom[0].powi(2));
+
+        return (xi +1.0).abs()
+
+    }
+
+    //got estimate from https://arxiv.org/pdf/1303.5057.pdf
+
+    fn estimate_d_lambda(&self)-> f64{
+        let mom = self.patch_momenta;
+        let coor = self.patch_coordinates;
+
+        let estimate1 = self.metric.Delta/( (mom[1]/coor[1]).abs()+mom[3].abs()+mom[2].abs());
+        let estimate2 = (coor[1]-self.metric.r_s)/(2.0* mom[1].abs());
+        
+        let min = if estimate1 < estimate2 {
+            estimate1
+        }else{
+
+            //println!("r estimate");
+            estimate2
+        };
+
+        return if self.metric.max_step< min {
+           self.metric.max_step
+        } else {
+            min
+        }  
     }
 }
 
@@ -410,8 +492,11 @@ impl<'a> SchwarzschildObject<'a>{
 
     fn reset_killing_const(&mut self){
         let mom = self.get_momenta_patch();
-        self.killing_const = [ mom[0]*self.metric.g_lower(0,0,self.get_coordinates_patch()) , mom[2]*self.metric.g_lower(2,2,self.get_coordinates_patch())  ]
-        //self.killing_const = [ mom[0] , mom[2]  ]
+        
+        let e = mom[0]*self.metric.g_lower(0,0,self.get_coordinates_patch());
+        let l = mom[2]*self.metric.g_lower(2,2,self.get_coordinates_patch());
+
+        self.killing_const = [ e ,l];
     }
 }
 
@@ -424,10 +509,11 @@ impl<'a> SchwarzschildObject<'a>{
 //t,x,y,z
 pub struct MinkowskiMetric {
     rk4_momenta : Box<[u8]>,
+    d_lambda:f64,
 }
 
-pub fn new_minkowski_metric() -> MinkowskiMetric {
-    MinkowskiMetric{rk4_momenta: Box::new([0,2]) }
+pub fn new_minkowski_metric(d_lambda:f64) -> MinkowskiMetric {
+    MinkowskiMetric{rk4_momenta: Box::new([0,2]), d_lambda: d_lambda }
 }
 
 
@@ -525,8 +611,24 @@ impl<'a> SpaceObject<'a> for MinkowskiObject<'a>{
         &self.metric.get_rk4_momenta()
     }
 
-    fn update_momenta_killing_symmetry(&mut self){
+    fn update_momenta_killing_symmetry(&mut self)->f64{
         //in minkowski, all momenta are conserved in metric, but not interesting enough to implement...
+        0.0
+    }
+
+    fn get_patch(&self)->u8{
+       0
+    }
+
+    fn set_patch(&mut self, _: u8){
+    }
+
+    fn get_error_estimate(&self)->f64{
+        0.0
+    }
+
+    fn estimate_d_lambda(&self)->f64{
+        self.metric.d_lambda
     }
 }
 
@@ -570,15 +672,11 @@ pub fn cart_to_spher (coordinates: &[f64;3], momenta: &[f64;3]) -> [ [f64;3];2] 
 
     let r2 =  (coordinates[0].powi(2) + coordinates[1].powi(2) ).sqrt();
 
-    //let pc = coordinates[0]/r2;
-    //let ps = coordinates[1]/r2;
-    //let hc = coordinates[2]/r;
-    //let hs = r2 /r;
+    let pc = coordinates[0]/r2;
+    let ps = coordinates[1]/r2;
+    let hc = coordinates[2]/r;
+    let hs = r2 /r;
 
-    let pc = phi.cos();
-    let ps = phi.sin();
-    let hc = theta.cos();
-    let hs = theta.sin();
 
     let newpos = [
         r,

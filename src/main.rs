@@ -4,8 +4,7 @@ pub mod python_interface;
 pub mod test_setups;
 pub mod black_body;
 
-use curved_space::Metric;
-use curved_space::SpaceObject;
+
 
 
 fn main() {
@@ -19,7 +18,7 @@ fn main() {
     
     //test_setups::generate_blackbody(1000.0,10000.0,200);
 
-
+    //test_setups::photon_orbit();
 }
 
 

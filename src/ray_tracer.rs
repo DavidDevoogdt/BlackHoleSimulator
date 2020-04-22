@@ -54,6 +54,7 @@ impl<'a,T: curved_space::Metric<'a>  > RayTracer<'a,T> {
                         for obj in photon.collision_object.iter() {
                             match  obj.detect_collision(&photon.prev_position,&coord,&mom   ) {
                                 Some(x) => {
+                                    //photon.dynamic.print();
                                     //println!("photon colided");
                                     photon.final_color = Some(x); //todo account for redshift
                                     photon.steps_left=0;
@@ -63,7 +64,7 @@ impl<'a,T: curved_space::Metric<'a>  > RayTracer<'a,T> {
                             }
                         }
 
-                        photon.prev_position = mom;
+                        photon.prev_position = coord;
 
                         photon.backup_pos_patch = photon.dynamic.get_coordinates_patch().clone();
                         photon.backup_momentum_patch = photon.dynamic.get_momenta_patch().clone();
@@ -80,7 +81,7 @@ impl<'a,T: curved_space::Metric<'a>  > RayTracer<'a,T> {
                     //print!("d_lambda {:.4}  err{:.4} steps left {} ",d_lambda,new_err,photon.steps_left );
                     //photon.dynamic.print();
 
-                    photon.final_color = Some(image::Rgb([255,0,255])); //todo account for redshift
+                    photon.final_color = Some(image::Rgb([255,0,255])); 
                     photon.steps_left=0;
                     break 'outer;
 
@@ -332,12 +333,20 @@ impl CollsionObject for Annulus{
     fn  detect_collision (& self, old: &[f64;4], new: &[f64;4], _:  &[f64;4]) -> Option < image::Rgb<u8>>{  
 
 
-        if new[1] >= self.radius1 &&  new[1] <= self.radius2 {  
+        let dtheta1= std::f64::consts::PI / 2.0 - new[3];
+        let dtheta2 = std::f64::consts::PI / 2.0 - old[3]; 
+        //theta switches side
+        if  dtheta1*dtheta2< 0.0 {
+            let perc = dtheta2.abs()/ (dtheta1.abs()+dtheta2.abs());
 
-            //theta switches side
-            if  (std::f64::consts::PI / 2.0 - new[3])* (std::f64::consts::PI / 2.0 - old[3]) < 0.0 {
+            let r = perc*new[1] + (1.0-perc)*old[1];
 
-                let p =  (self.divisions * new[2] / ( std::f64::consts::PI).round()  )as i64; 
+
+            if r >= self.radius1 &&  r <= self.radius2 {  
+
+                let phi = perc*new[2] + (1.0-perc)*old[2];
+
+                let p =  (self.divisions * phi / ( std::f64::consts::PI).round()  )as i64; 
 
                 if p%2==0 {
                     return  Some( self.color1);

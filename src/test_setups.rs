@@ -66,53 +66,45 @@ pub fn launch_parallel_photons(){
 /// 
 
 pub fn ray_trace_schwarzshild(){
-    let r_s = 0.1;
+
+    let precision = 1.0/32.0;
+    let steps = (1000.0/precision) as i32;
+
+    let r_s = 1.0;
     //let metric = curved_space::new_schwarzschild_metric(1.0);
     let metric = curved_space::SchwarzschildMetric{
         r_s:r_s,
         rk4_momenta: Box::new([1,3]),
-        Delta: 1e-3,
+        Delta: precision,
         max_step: 2.0,
     };
 
 
     let camera = ray_tracer::Camera{ 
-        pos : [ -2.0,0.0,0.0],
-        direction : [1.0,0.0,0.0],
-        x_res : 1920/10,
-        y_res : 1080/10,
+        pos : [ -15.0,0.0,2.0],
+        direction : [1.0,0.0,-2.0/15.0],
+        x_res : 1920,
+        y_res : 1080,
         distance: 0.1,
         width: 0.16,
         height : 0.09,
         rotation_angle :0.0/360.0*(2.0*std::f64::consts::PI),
     };
 
-    // let camera = ray_tracer::Camera{ 
-    //     pos : [ -8.0,0.0,0.0],
-    //     direction : [1.0,0.0,0.0],
-    //     x_res : 2*1080/(9*10),
-    //     y_res : 1080/10,
-    //     distance: 0.1,
-    //     width: 0.01,
-    //     height : 0.09,
-    //     rotation_angle :0.0/360.0*(2.0*std::f64::consts::PI),
+
+    // let black_sphere = ray_tracer::Sphere{
+    //     color1: image::Rgb([0,0,0]),
+    //     color2: image::Rgb([0,0,0]),
+    //     radius: 1.01*r_s,
+    //     divisions: 10.0,
     // };
 
-
-
-    let black_sphere = ray_tracer::Sphere{
-        color1: image::Rgb([0,0,0]),
-        color2: image::Rgb([0,0,0]),
-        radius: 1.01*r_s,
-        divisions: 10.0,
+    let colored_sphere = ray_tracer::Sphere{
+        color1: image::Rgb([0,255,0]),
+        color2: image::Rgb([255,255,255]),
+        radius: 1.001*r_s,
+        divisions: 5.0,
     };
-
-    // let colored_sphere = ray_tracer::Sphere{
-    //     color1: image::Rgb([255,0,0]),
-    //     color2: image::Rgb([0,0,255]),
-    //     radius: 1.05*r_s,
-    //     divisions: 5.0,
-    // };
     
     let accretion_disk = ray_tracer::Annulus{
         color1: image::Rgb([255,0,0]),
@@ -129,15 +121,16 @@ pub fn ray_trace_schwarzshild(){
 
     let skybox = ray_tracer::Skybox{
         image: image,
-        radius: 3.0,
+        radius: 20.0,
         x_res: xres as i32,
         y_res : yres as i32,
         phi_offset: std::f64::consts::PI,
     };
    
     let col_objects : Vec< Box< dyn ray_tracer::CollsionObject> > = vec![
-        Box::new(black_sphere),
-        //Box::new(accretion_disk),
+        //Box::new(black_sphere),
+        Box::new(colored_sphere),
+        Box::new(accretion_disk),
         Box::new(skybox)
     ];
    
@@ -145,12 +138,12 @@ pub fn ray_trace_schwarzshild(){
         camera,
         &col_objects,
         &metric,
-        50000 ,
+        steps ,
         false,
     );
 
     
-    ray_tracer.run_simulation(1, 1e-1 );
+    ray_tracer.run_simulation(1, 1e1 );
 
     //ray_tracer.plot_paths();
     ray_tracer.generate_image("src_files/schw800x800.bmp");

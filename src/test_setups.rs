@@ -75,7 +75,7 @@ pub fn ray_trace_schwarzshild(){
     let metric = curved_space::SchwarzschildMetric{
         r_s:r_s,
         rk4_momenta: Box::new([1,3]),
-        Delta: precision,
+        delta: precision,
         max_step: 2.0,
     };
 
@@ -83,8 +83,8 @@ pub fn ray_trace_schwarzshild(){
     let camera = ray_tracer::Camera{ 
         pos : [ -15.0,0.0,2.0],
         direction : [1.0,0.0,-2.0/15.0],
-        x_res : 1920,
-        y_res : 1080,
+        x_res : 1920/10,
+        y_res : 1080/10,
         distance: 0.1,
         width: 0.16,
         height : 0.09,
@@ -269,7 +269,7 @@ fn test_wavelentgh_convo (){
     let metric = curved_space::SchwarzschildMetric{
         r_s:r_s,
         rk4_momenta: Box::new([1,3]),
-        Delta: 1.0/32.0,
+        delta: 1.0/32.0,
         max_step: 2.0,
     };
 

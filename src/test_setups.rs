@@ -27,7 +27,7 @@ fn generate_parallel_photons<'a>( distance : f64, spacing: f64, number: i32, met
 pub fn launch_parallel_photons(){
 
     let num_photons = 50;
-    let mut results : Vec<Vec<[f64;8]>> = Vec::new();
+    let mut results : Vec<Vec<[[f64;4];2]>> = Vec::new();
 
     let metric = curved_space::new_schwarzschild_metric(
         1.0,
@@ -39,13 +39,13 @@ pub fn launch_parallel_photons(){
 
     for (i,x) in photons.iter_mut().enumerate() {
 
-        let mut v : Vec<[f64;8]> = Vec::new();
+        let mut v : Vec<[[f64;4];2]> = Vec::new();
 
         // println!("{}",x);
       
         for _ in 0..2000 {
             
-            v.push( x.get_cartesian_coordinates_and_momenta() ); //creates a copy to push
+            v.push( x.calculate_cartesian_coordinates_and_momenta() ); //creates a copy to push
             x.take_step(0.01);
 
             if x.get_coordinates_patch()[1] < 1.05 {
@@ -74,7 +74,6 @@ pub fn ray_trace_schwarzshild(){
     //let metric = curved_space::new_schwarzschild_metric(1.0);
     let metric = curved_space::SchwarzschildMetric{
         r_s:r_s,
-        rk4_momenta: Box::new([1,3]),
         delta: precision,
         max_step: 2.0,
     };
@@ -268,7 +267,6 @@ fn test_wavelentgh_convo (){
     //let metric = curved_space::new_schwarzschild_metric(1.0);
     let metric = curved_space::SchwarzschildMetric{
         r_s:r_s,
-        rk4_momenta: Box::new([1,3]),
         delta: 1.0/32.0,
         max_step: 2.0,
     };

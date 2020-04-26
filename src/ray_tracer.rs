@@ -49,7 +49,7 @@ impl<'a,T: curved_space::Metric<'a>  > RayTracer<'a,T> {
                     if steps_taken == steps_per_collision_detection {
                         photon.dynamic.sanitize_coordinates();
 
-                        let [coord,mom] = photon.dynamic.get_coordinates_and_momenta();
+                        let [coord,mom] = photon.dynamic.calculate_coordinates_and_contravariant_momenta();
 
                         for obj in photon.collision_object.iter() {
                             match  obj.detect_collision(&photon.prev_position,&coord,&mom   ) {
@@ -75,7 +75,7 @@ impl<'a,T: curved_space::Metric<'a>  > RayTracer<'a,T> {
                     }
 
                     if photon.save_path {
-                    photon.path.push(  photon.dynamic.get_cartesian_coordinates_and_momenta() );  
+                    photon.path.push(  photon.dynamic.calculate_cartesian_coordinates_and_momenta() );  
                     }
                 }else{
                     //print!("d_lambda {:.4}  err{:.4} steps left {} ",d_lambda,new_err,photon.steps_left );
@@ -476,7 +476,7 @@ pub struct Photon< 'a, T: curved_space::SpaceObject<'a> + std::marker::Send + st
     phantom : std::marker::PhantomData<&'a T>,
     final_color : Option< image::Rgb<u8> >,
     collision_object : &'a Vec< Box< dyn CollsionObject> >,
-    path : Vec< [f64;8]>,
+    path : Vec< [[f64;4];2]>,
     save_path : bool,
 }
 

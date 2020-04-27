@@ -1,34 +1,6 @@
-
-// Helper objects 
-
-/// integrate equation dy/dt = f(t,y) over a time step dt and store result in orig params
-pub fn rk4 (f : impl Fn(f64) -> f64, y: &mut f64,dt:f64)  {
-    let k1 = dt* f(*y);
-    let k2 = dt* f(*y+k1/2.0);
-    let k3 = dt* f(*y+k2/2.0);
-    let k4 = dt* f(*y+k3);
-    *y=*y+(k1+2.0*k2+2.0*k3+k4)/6.0;
-}
-
-
-#[test]
-fn integrator(){
-    let mut t= 0.0;
-    let mut y= 1.0;
-    for _ in 0..100 {
-        let dt = 0.01;
-         rk4( |y: f64| -> f64 {y} ,&mut y,dt)  ;
-        t = t+ dt;
-        println!("t:{:.3} y:{:.3}  e^t:{:.3}",t,y,t.exp() );
-    }
-}
-
-
-///// main definitions
 pub trait SpaceObject<'a>{
 
     //getters
-
     fn get_mass(&self)->f64;
 
     fn get_coordinates_patch(&self) -> &[f64;4];
@@ -152,9 +124,6 @@ pub fn new_schwarzschild_metric(r_s:f64, delta:f64, max_step: f64) -> Schwarzsch
 
 impl<'a> Metric<'a> for SchwarzschildMetric {
     type SpecificSpaceObject= SchwarzschildObject<'a>;
-
-    
-
     fn g_lower(&self, x0 :u8, x1 :u8,coor :&[f64;4]) -> f64{
         match (x0,x1) {
             (0,0) => (1.0 - self.r_s/coor[ 1 ] ),
@@ -677,4 +646,334 @@ pub fn cart_to_spher (coordinates: &[f64;3], momenta: &[f64;3]) -> [ [f64;3];2] 
 
     [newpos,newmom]
 
+}
+
+
+// implemntation of kerr metric with hamiltonian equations of motion
+
+
+////////////////////implementation of the schwarzschildmetric
+
+//t,r,phi,theta
+pub struct KerrMetric {
+    pub M : f64,
+    pub J : f64,
+    pub a:f64,
+    pub r_s:f64,
+    pub step_parameter:f64,
+}
+
+pub fn new_Kerr_metric( J:f64, step_parameter: f64) -> KerrMetric {
+    KerrMetric {
+        M:1.0,
+        J:J,
+        a: J,
+        r_s:2.0,
+        step_parameter: step_parameter,
+    }
+}
+
+
+impl KerrMetric {
+
+    fn get_sigma(&self, coor :&[f64;4])->f64{
+        coor[1].powi(2) + (self.a* coor[2].cos()).powi(2) 
+    }
+
+    fn get_delta(&self, coor:&[f64;4] )->f64{
+        coor[1].powi(2) - self.r_s * coor[1]+ self.a.powi(2)
+    }
+}
+
+impl<'a> Metric<'a> for KerrMetric {
+    type SpecificSpaceObject= KerrObject<'a>;
+    fn g_lower(&self, x0 :u8, x1 :u8,coor :&[f64;4]) -> f64{
+        match (x0,x1){
+            (0,0)=> -(1.0- self.r_s*coor[1]/self.get_sigma( coor )),
+            (1,1)=> self.get_sigma(coor)/self.get_delta(coor),
+            (2,2)=> ( coor[1].powi(2)+ self.a.powi(2) *(1.0+ self.r_s*coor[1]/self.get_sigma( coor ) * coor[3].sin().powi(2))   )*coor[3].sin().powi(2),
+            (3,3)=> self.get_sigma(coor),
+            (0,2)=>  -2.0*self.r_s*coor[1]*self.a* coor[3].sin().powi(2)/self.get_sigma(coor),
+            _ => panic!("wrong call to g_lower kerr"),
+        }
+    }
+
+    fn g_upper(&self, x0 :u8, x1 :u8,coor :&[f64;4]) -> f64{
+        let det = -(self.get_delta(coor) * coor[3].sin().powi(2));
+
+        match (x0,x1){
+            (0,0)=> self.g_lower(2,2,coor)/det ,
+            (1,1)=> self.get_delta(coor)/self.get_sigma(coor) ,
+            (2,2)=> self.g_lower(0,0,coor)/det,
+            (3,3)=> 1.0/(self.get_sigma(coor) ),
+            (0,2)=> -self.g_lower(0,2,coor)/det,
+            _ => panic!("wrong call to g_upper kerr"),
+        }
+    }
+
+    fn to_covariant_vector(&self, coordinates : &[f64;4] ,vec: &[f64;4]) -> [f64;4]{
+        [ 
+            vec[0]* self.g_lower(0,0, coordinates) + 0.5*vec[2]* self.g_lower(0,2, coordinates), 
+            vec[1]* self.g_lower(1,1, coordinates), 
+            vec[2]* self.g_lower(2,2, coordinates) + 0.5*vec[0]* self.g_lower(0,2, coordinates),
+            vec[3]* self.g_lower(3,3, coordinates)  
+        ]
+    }
+
+    fn to_contravariant_vector(&self, coordinates : &[f64;4] ,vec: &[f64;4]) -> [f64;4]{
+        [ 
+            vec[0]* self.g_upper(0,0, coordinates) +0.5*vec[2]* self.g_upper(0,2, coordinates),
+            vec[1]* self.g_upper(1,1, coordinates),
+            vec[2]* self.g_upper(2,2, coordinates) +0.5*vec[0]* self.g_upper(0,2, coordinates),
+            vec[3]* self.g_upper(3,3, coordinates)  
+        ]
+    }
+
+    //momenta input are contravariant
+    fn spawn_space_object(&'a self ,coordinates : [f64;4], momenta : [f64;4] , mass : f64) -> Self::SpecificSpaceObject{ 
+        let mut  res = KerrObject{  
+             coordinates : coordinates,
+             momenta: self.to_covariant_vector( &coordinates, &momenta),
+             mass: mass, metric: &self, 
+             constants_of_motion: [ 0.0, 0.0, 0.0 ],
+        };        
+
+        res.sanitize_coordinates();
+        res.reset_killing_const();
+
+        res
+    }
+
+    fn spawn_space_object_from_cartesian( &'a self ,coordinates :[f64;4], contravariant_momenta : [f64;4] , mass : f64) -> Self::SpecificSpaceObject{
+        let [coor,mom] = cart_to_kerr(   &[coordinates[1],coordinates[2],coordinates[3]] ,  &[contravariant_momenta[1],contravariant_momenta[2],contravariant_momenta[3]], self.a );
+
+        let newpos = [
+            coordinates[0],
+            coor[0],
+            coor[1],
+            coor[2]
+        ];
+
+        let a = self.g_lower(0,0,&newpos);
+        let b = self.g_lower(0,2,&newpos)* mom[1];
+        let c = (mom[0].powi(2)*self.g_lower(1,1,&newpos) + mom[1].powi(2)*self.g_lower(2,2,&newpos)+mom[2].powi(2)*self.g_lower(3,3,&newpos)) - mass.powi(2);
+
+        //sign for sqrt ?
+
+        let p_t = (-b + ( b.powi(2)-4.0*a*c ).sqrt())/(2.0*a);
+
+        let newmom =  [ 
+            p_t, 
+            mom[0],
+            mom[1],
+            mom[2]
+        ];
+
+        self.spawn_space_object( newpos , newmom, mass)
+
+    }
+
+    
+}
+
+
+//implementation of a object living in a schwarzschildmetric
+
+pub struct KerrObject <'a> {
+    coordinates : [f64;4], // x^mu
+    momenta :  [f64;4], //p_\mu = g_\mu \nu p^\nu
+    metric: &'a KerrMetric,
+    mass : f64,
+    constants_of_motion: [f64;3],
+}
+
+impl<'a> SpaceObject<'a> for KerrObject<'a>{
+
+    fn get_coordinates_patch(&self) -> &[f64;4]{
+        &self.coordinates
+    }
+
+    fn get_momenta_patch(&self) -> &[f64;4]{
+        &self.momenta
+    }
+
+    fn get_mut_coordinates_patch(&mut self) -> &mut [f64;4]{
+        &mut self.coordinates
+    }
+
+    fn get_mut_momenta_patch(&mut self) -> &mut [f64;4]{
+        &mut self.momenta
+    }
+
+    fn calculate_coordinates_and_contravariant_momenta(&self) -> [[f64;4];2] {
+        [ 
+            self.coordinates,
+            self.metric.to_contravariant_vector( &self.coordinates, &self.momenta ) 
+        ]
+    }
+
+    fn calculate_covariant_momenta (&self) -> [f64;4]{
+        self.momenta    
+    }
+
+    // information taken from https://arxiv.org/pdf/1601.02063.pdf
+    fn get_vector_derivative(&self, coor: &[f64;4], mom: &[f64;4] ) -> [[f64;4];2]{
+        let mom_contra = self.metric.to_contravariant_vector( coor, mom);
+        let metr = self.metric;
+
+        let [E,L,Kappa] = self.constants_of_motion;
+
+        let sin_theta  = coor[3].sin();
+        let cos_theta = coor[3].cos();
+        
+        [
+          [
+            mom_contra[0] ,
+            mom_contra[1],
+            mom_contra[2],
+            mom_contra[3],
+          ],
+          [
+            0.0,
+            1.0/( metr.get_sigma(coor)*metr.get_delta(coor) )*(
+                -Kappa*( coor[1]-1.0 )
+                + 2.0*coor[1]*( coor[1].powi(2)+ metr.a.powi(2))*E.powi(2)
+                -2.0*metr.a*E*L
+            ) -2.0*mom[1].powi(2)*( coor[1]-1.0)/metr.get_sigma(coor),
+            0.0,
+            sin_theta*cos_theta/metr.get_sigma(coor)*(  (L/sin_theta.powi(2)).powi(2) - (self.metric.a*E).powi(2)   ),
+          ]
+        ]
+    }
+
+    fn calculate_cartesian_coordinates_and_momenta(&self) -> [[f64;4];2] {
+        let mut ret : [[f64;4];2] = [[0.0;4];2];
+
+        let [coordinates,momenta] = self.calculate_coordinates_and_contravariant_momenta();
+
+        let [coor,mom] = kerr_to_cart(  &[coordinates[1],coordinates[2],coordinates[3]] ,  &[momenta[1],momenta[2],momenta[3]], self.metric.a );
+
+        ret[0][0] = coordinates[0];
+        ret[1][0] = momenta[0];
+
+        for i in 1..4 {
+            ret[0][i] = coor[i-1];
+            ret[1][i] = mom[i-1];
+        }
+
+        ret
+    }
+
+    fn sanitize_coordinates(&mut self) {
+        
+        let mut mut_coor = self.coordinates;
+        let mut mut_mom = self.momenta;
+
+        if mut_coor[3] < 0.0 {
+             mut_coor[3]   *= -1.0 ;
+             mut_mom[3] *= -1.0;
+             mut_coor[2] -= std::f64::consts::PI;
+
+        } else if mut_coor[3] >std::f64::consts::PI {
+            mut_coor[3]  = 2.0*std::f64::consts::PI -  mut_coor[3];
+            mut_mom[3] *= -1.0;
+            mut_coor[2] += std::f64::consts::PI;
+        }
+
+    }
+
+    fn get_mass(&self)->f64{
+        self.mass
+    }
+
+    fn get_patch(&self)->u8{0}
+    fn set_patch(&mut self, _: u8){ }
+
+    fn get_error_estimate(&self)->f64{
+        //todo
+        0.0
+    }
+
+    fn estimate_d_lambda(&self)-> f64{
+        //todo
+        self.metric.step_parameter
+    }
+}
+
+impl<'a> KerrObject<'a>{
+
+    //https://arxiv.org/pdf/1601.02063.pdf
+    fn reset_killing_const(&mut self){
+        let mom = self.momenta;
+        let coor = self.coordinates;
+        
+        let E = -mom[0];
+        let L = mom[2];
+        let kappa = mom[3].powi(2) + (L/ coor[3].sin()).powi(2) + (self.metric.a * E ).powi(2); 
+        
+        self.constants_of_motion = [ E ,L, kappa];
+    }
+}
+
+
+
+pub fn kerr_to_cart(coor: &[f64;3], mom: &[f64;3],a:f64) -> [ [f64;3];2] {
+
+    let ps = coor[1].sin();
+    let pc = coor[1].cos();
+    let hs = coor[2].sin();
+    let hc = coor[2].cos();
+    
+    let pr = mom[0];
+    let ph = mom[2];
+    let pp = mom[1];
+    
+    let r = coor[0];
+    
+    let a_r = (r.powi(2)+a.powi(2)).sqrt();
+
+    [
+        [
+            a_r* hs*pc,
+            a_r* hs*ps,
+            r* hc
+        ], 
+        [
+            r/a_r*hs*pc*pr  - a_r*hs*ps*pp + a_r*hc*pc*ph,
+            r/a_r*hs*ps*pr  + a_r*hs*pc*pp+ a_r*hc*ps*ph,
+            hc*pr +0.0-r*hs*ph
+        ]
+    ]
+
+
+}
+
+pub fn cart_to_kerr (coordinates: &[f64;3], momenta: &[f64;3],a:f64) -> [ [f64;3];2] {
+
+    let phi = coordinates[1].atan2( coordinates[0]);
+    let b =  coordinates[0].powi(2) + coordinates[1].powi(2) + coordinates[2].powi(2) - a.powi(2);
+    let r = ( (  b + ( b.powi(2) + 4.0* (a*coordinates[2]).powi(2) ).sqrt()   )/2.0 ).sqrt();
+    let theta =  (coordinates[2]/r).acos();
+
+    let newpos = [
+        r,
+        phi,
+        theta
+    ];
+
+    let a_r = (r.powi(2)+a.powi(2)).sqrt();
+    let N = (theta.cos()*a).powi(2)+r.powi(2);
+
+    let hc = theta.cos();
+    let hs = theta.sin();
+    let pc = phi.cos();
+    let ps = phi.sin();
+    
+    let newmom =  [ 
+        a_r*r/N*hs*pc* momenta[0] + a_r*r/N*hs*ps*momenta[1]+ a_r.powi(2)/N*hc*momenta[2],
+        -ps/(a_r* hs)*momenta[0] + pc/(a_r* hs) *momenta[1],
+        a_r/N*hc*pc*momenta[0] + a_r/N*hc*ps*momenta[1]-r/N*hs*momenta[2]
+    ];
+
+    [newpos,newmom]
 }

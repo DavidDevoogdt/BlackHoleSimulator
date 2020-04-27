@@ -23,6 +23,16 @@ fn generate_parallel_photons<'a>( distance : f64, spacing: f64, number: i32, met
     return a;
 }
 
+fn generate_parallel_photons_kerr<'a>( distance : f64, spacing: f64, number: i32, metric : &'a  curved_space::KerrMetric ) -> Vec< curved_space::KerrObject<'a>  > {
+    let mut a :Vec< curved_space::KerrObject > = Vec::new(); 
+    for i in 0..number {
+        
+        a.push( metric.spawn_space_object_from_cartesian( [ 0.0,-distance, 0.0,(i as f64)*spacing,],
+          [1.0,1.0,0.0,0.0,] , 0.0 ))
+    }
+
+    return a;
+}
 
 pub fn launch_parallel_photons(){
 
@@ -61,6 +71,103 @@ pub fn launch_parallel_photons(){
 
     python_interface::launch_python(num_photons, "xz" ); 
 }
+//
+
+
+pub fn launch_parallel_photons_kerr(){
+
+    let num_photons = 50;
+    let mut results : Vec<Vec<[[f64;4];2]>> = Vec::new();
+
+    let metric = curved_space::new_Kerr_metric(
+        0.0,
+        1e-1
+    );
+
+    let mut photons  = generate_parallel_photons_kerr(5.0,0.2,num_photons , & metric);
+
+    for (i,x) in photons.iter_mut().enumerate() {
+
+        let mut v : Vec<[[f64;4];2]> = Vec::new();
+
+        // println!("{}",x);
+      
+        for _ in 0..2000 {
+            
+            v.push( x.calculate_cartesian_coordinates_and_momenta() ); //creates a copy to push
+            x.take_step(0.01);
+
+            if x.get_coordinates_patch()[1] < 1.05 {
+                break;
+            }
+        
+        } 
+
+        let _ = python_interface::save_to_csv( &v, format!("files/photon{}.csv", i));
+
+        results.push(v);
+    }
+
+    python_interface::launch_python(num_photons, "xz" ); 
+}
+
+
+
+//////
+/// 
+
+
+pub fn ray_trace_kerr(){
+
+    let metric = curved_space::new_Kerr_metric(3.0,  1.0/10.0);
+
+
+    let camera = ray_tracer::Camera{ 
+        pos : [ -15.0,0.0,2.0],
+        direction : [1.0,0.0,-2.0/15.0],
+        x_res : 1920/10,
+        y_res : 1080/10,
+        distance: 0.02,
+        width: 0.16,
+        height : 0.09,
+        rotation_angle :0.0/360.0*(2.0*std::f64::consts::PI),
+    };
+
+    
+    let image = image::open("src_files/ESO_-_Milky_Way.jpg").unwrap().into_rgb();
+    //let image = image::open("src/download.jpeg").unwrap().into_rgb();
+    let (xres,yres) = image.dimensions();
+
+    //todo: implement proper skybox for kerr metric
+
+    let skybox = ray_tracer::Skybox{
+        image: image,
+        radius: 20.0,
+        x_res: xres as i32,
+        y_res : yres as i32,
+        phi_offset: std::f64::consts::PI,
+    };
+   
+    let col_objects : Vec< Box< dyn ray_tracer::CollsionObject> > = vec![
+        Box::new(skybox)
+    ];
+   
+    let mut ray_tracer = ray_tracer::new( 
+        camera,
+        &col_objects,
+        &metric,
+        10000 ,
+        false,
+    );
+
+    ray_tracer.run_simulation(1, 1e1 );
+
+    ray_tracer.generate_image("src_files/schw800x800.bmp");
+
+}
+
+
+
 
 //////////////////
 /// 
@@ -301,27 +408,55 @@ fn test_wavelentgh_convo (){
  }
 
 
+pub fn test_coordinate_system_2(){
 
-//  for _ in 0..2 {
+    let metric = curved_space::new_Kerr_metric(1.0, 1e-1);
+ 
+    let  [coor,mom] = [
+        [0.0,-1.3,2.5,0.4],
+        [1.0,0.0,1.0,0.0]
+    ];
+
+    
+    let phot = metric.spawn_space_object_from_cartesian( coor, mom,0.0 );
+    let [coor2,mom2] = phot.calculate_cartesian_coordinates_and_momenta();
+
+    println!("[{:.4},{:.4},{:.4},{:.4}]->[{:.4},{:.4},{:.4},{:.4}]", coor[0],coor[1],coor[2],coor[3], coor2[0],coor2[1],coor2[2],coor2[3] );
+    println!("[{:.4},{:.4},{:.4},{:.4}]->[{:.4},{:.4},{:.4},{:.4}]", mom[0],mom[1],mom[2],mom[3], mom2[0],mom2[1],mom2[2],mom2[3] );
+       
+
+}
+
+pub fn test_coordinate_system_3(){
+
+    let  [coor,mom] = [
+        [-1.3,2.31,0.4],
+        [1.0,3.0,-0.68]
+    ];
+
+    let [coor2,mom2] =curved_space::cart_to_kerr( &coor,&mom,0.5 );
+    let [coor3,mom3] =curved_space::kerr_to_cart( &coor2,&mom2, 0.5 );
+
+    println!("[{:.4},{:.4},{:.4}]->[{:.4},{:.4},{:.4}]", coor[0],coor[1],coor[2], coor3[0],coor3[1],coor3[2] );
+    println!("[{:.4},{:.4},{:.4}]->[{:.4},{:.4},{:.4}]", mom[0],mom[1],mom[2], mom3[0],mom3[1],mom3[2] );
+       
+
+}
+
+pub fn test_coordinate_system(){
+
+    let metr = curved_space::new_Kerr_metric(0.32, 0.0);
+ 
+    let  [coor,mom] = [
+        [1.0,-1.28,2.85,0.4],
+        [1.0,1.0,3.1,-0.68]
+    ];
+
+    let co_mom = metr.to_covariant_vector(&coor, &mom);
+    let contra_mom = metr.to_contravariant_vector(&coor, &co_mom);
 
 
-    // let metric = curved_space::SchwarzschildMetric{r_s:1.0};
-    // let mut  phot = metric.spawn_space_object_from_cartesian( [0.0,-1.0,2.5,0.4],[1.0,1.0,0.7,3.8],0.0 );
-//     phot.switch_patch();
+    println!("[{:.4},{:.4},{:.4}{:.4}]->[{:.4},{:.4},{:.4},{:.4}]", mom[0],mom[1],mom[2],mom[3], contra_mom[0],contra_mom[1],contra_mom[2],contra_mom[3] );
+       
 
-//     println!("\n cart coor");
-//     let a = phot.get_cartesian_coordinates_and_momenta();
-//     let b = phot.get_coordinates_patch();
-//     let c = phot.get_momenta_patch();
-//     for i in 0..8{
-//         print!("{} ",a[i]);
-//     }
-//     println!("\n representation:");
-//     for i in 0..4{
-//         print!("{} ",b[i]);
-//     }
-//     for i in 0..4{
-//         print!("{} ",c[i]);
-//     }
-
-// }
+}

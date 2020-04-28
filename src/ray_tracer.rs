@@ -39,8 +39,8 @@ impl<'a,T: curved_space::Metric<'a>  > RayTracer<'a,T> {
 
                 let d_lambda = photon.dynamic.estimate_d_lambda();
 
-                let new_err = photon.dynamic.take_step( d_lambda );
-
+                photon.dynamic.take_step( d_lambda );
+                let new_err = photon.dynamic.get_error_estimate();
 
                 if new_err < max_tolerance {
 
@@ -65,11 +65,6 @@ impl<'a,T: curved_space::Metric<'a>  > RayTracer<'a,T> {
                         }
 
                         photon.prev_position = coord;
-
-                        photon.backup_pos_patch = photon.dynamic.get_coordinates_patch().clone();
-                        photon.backup_momentum_patch = photon.dynamic.get_momenta_patch().clone();
-                        photon.backup_patch = photon.dynamic.get_patch();
-
 
                         steps_taken = 0;
                     }
@@ -203,21 +198,12 @@ pub fn new<'a,  T: curved_space::Metric<'a> > ( camera: Camera,objects:  &'a Vec
 
             let obj  = metric.spawn_space_object_from_cartesian( pos , [1.0, px/norm,  py/norm, pz/norm], 0.0 );
             
-            //println!("mom new photon {}",obj.contract_momentum()) ;
-            let backup_pos_patch = obj.get_coordinates_patch().clone();
-            let backup_momentum_patch = obj.get_momenta_patch().clone();
-            let backup_patch = obj.get_patch();
-
-
 
             let p = Photon{ 
                 save_path: save_path,
                 collision_object: objects ,
                 prev_position : pos,
                 dynamic: obj,
-                backup_pos_patch: backup_pos_patch,
-                backup_momentum_patch: backup_momentum_patch,
-                backup_patch: backup_patch,
                 steps_left: max_steps,
                 path: vec![] ,
                 phantom  :  std::marker::PhantomData,
@@ -469,9 +455,6 @@ impl CollsionObject for SkyboxCart {
 pub struct Photon< 'a, T: curved_space::SpaceObject<'a> + std::marker::Send + std::marker::Sync >  {
     dynamic : T,
     prev_position :  [f64;4],
-    backup_pos_patch :  [f64;4],
-    backup_momentum_patch :  [f64;4],
-    backup_patch: u8,
     steps_left: i32,
     phantom : std::marker::PhantomData<&'a T>,
     final_color : Option< image::Rgb<u8> >,

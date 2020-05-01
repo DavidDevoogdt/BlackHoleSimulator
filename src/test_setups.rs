@@ -79,7 +79,7 @@ pub fn launch_parallel_photons_kerr(){
     let num_photons = 50;
     let mut results : Vec<Vec<[[f64;4];2]>> = Vec::new();
 
-    let metric = curved_space::new_Kerr_metric(
+    let metric = curved_space::new_kerr_metric(
         0.0,
         1e-1
     );
@@ -119,48 +119,64 @@ pub fn launch_parallel_photons_kerr(){
 
 pub fn ray_trace_kerr(){
 
-    let metric = curved_space::new_Kerr_metric(3.0,  1.0/10.0);
+    let M= 1.0;
+    let J = 0.95;
+    let a = J;
+    let r_s: f64 =2.0;
+
+    let metric = curved_space::new_kerr_metric(J,  1e-8);
 
 
     let camera = ray_tracer::Camera{ 
-        pos : [ -15.0,0.0,2.0],
-        direction : [1.0,0.0,-2.0/15.0],
-        x_res : 1920/10,
-        y_res : 1080/10,
-        distance: 0.02,
+        pos : [0.0,-30.0,0.0],
+        direction : [0.0,1.0,0.0],
+        x_res : 1920,
+        y_res : 1080,
+        distance: 0.05,
         width: 0.16,
         height : 0.09,
         rotation_angle :0.0/360.0*(2.0*std::f64::consts::PI),
     };
 
-    
+    //let image = image::open("src_files/milky_way_equirectangular.png").unwrap().into_rgb();
     let image = image::open("src_files/ESO_-_Milky_Way.jpg").unwrap().into_rgb();
-    //let image = image::open("src/download.jpeg").unwrap().into_rgb();
+    //let image = image::open("src_files/download.jpeg").unwrap().into_rgb();
+    
     let (xres,yres) = image.dimensions();
 
     //todo: implement proper skybox for kerr metric
 
-    let skybox = ray_tracer::Skybox{
+    let skybox = ray_tracer::SkyboxKerr{
         image: image,
-        radius: 20.0,
+        radius: 40.0,
         x_res: xres as i32,
         y_res : yres as i32,
-        phi_offset: std::f64::consts::PI,
+        phi_offset: -90.0/180.0* std::f64::consts::PI,
+        a: a,
     };
    
+    let black_sphere = ray_tracer::Sphere{
+        color1: image::Rgb([0,0,0]),
+        color2: image::Rgb([0,0,0]),
+        radius: 1.001*(r_s + (r_s.powi(2)-4.0*a.powi(2)).sqrt()  )/2.0,
+        divisions: 10.0,
+    };
+
+
     let col_objects : Vec< Box< dyn ray_tracer::CollsionObject> > = vec![
-        Box::new(skybox)
+        Box::new( black_sphere),
+        Box::new(skybox),
     ];
    
     let mut ray_tracer = ray_tracer::new( 
         camera,
         &col_objects,
         &metric,
-        10000 ,
+        1000 ,
         false,
     );
 
-    ray_tracer.run_simulation(1, 1e1 );
+    ray_tracer.run_simulation(1, 1e-6 );
 
     ray_tracer.generate_image("src_files/schw800x800.bmp");
 
@@ -174,8 +190,8 @@ pub fn ray_trace_kerr(){
 
 pub fn ray_trace_schwarzshild(){
 
-    let precision = 1.0/32.0;
-    let steps = (1000.0/precision) as i32;
+    let precision = 0.01;
+    let steps: i32 = (10000.0/precision) as i32;
 
     let r_s = 1.0;
     //let metric = curved_space::new_schwarzschild_metric(1.0);
@@ -185,10 +201,9 @@ pub fn ray_trace_schwarzshild(){
         max_step: 2.0,
     };
 
-
     let camera = ray_tracer::Camera{ 
         pos : [ -15.0,0.0,2.0],
-        direction : [1.0,0.0,-2.0/15.0],
+        direction : [1.0,0.0,0.0],
         x_res : 1920/10,
         y_res : 1080/10,
         distance: 0.1,
@@ -301,7 +316,7 @@ pub fn ray_trace_minkowski(){
         radius: 10.0,
         x_res: xres as i32,
         y_res : yres as i32,
-        phi_offset: std::f64::consts::PI,
+        phi_offset: 90.0/360.0 *std::f64::consts::PI,
     };
    
         
@@ -410,7 +425,7 @@ fn test_wavelentgh_convo (){
 
 pub fn test_coordinate_system_2(){
 
-    let metric = curved_space::new_Kerr_metric(1.0, 1e-1);
+    let metric = curved_space::new_kerr_metric(1.0, 1e-1);
  
     let  [coor,mom] = [
         [0.0,-1.3,2.5,0.4],
@@ -445,7 +460,7 @@ pub fn test_coordinate_system_3(){
 
 pub fn test_coordinate_system(){
 
-    let metr = curved_space::new_Kerr_metric(0.32, 0.0);
+    let metr = curved_space::new_kerr_metric(0.32, 0.0);
  
     let  [coor,mom] = [
         [1.0,-1.28,2.85,0.4],

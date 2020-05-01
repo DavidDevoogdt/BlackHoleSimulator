@@ -23,11 +23,14 @@ pub trait SpaceObject<'a>{
     //implementation specific functions
    
     fn sanitize_coordinates(&mut self);
-    fn estimate_d_lambda(&self)-> f64;  
+    
+    fn get_d_lambda(&self)-> f64;
+    fn set_d_lambda(&mut self, d_lambda: Option<f64>);
+    
     fn get_vector_derivative(&self, coor: &[f64;4], mom: &[f64;4] ) -> [[f64;4];2];
 
     fn get_error_estimate(&self)->f64;
-    fn set_error_estimate(&mut self, Option<f64>);
+    fn set_error_estimate(&mut self, err: Option<f64>);
 
     // Implement stepping mechanism or chose from default implementations below
     fn take_step(&mut self, d_lambda : f64);
@@ -82,12 +85,131 @@ pub trait SpaceObject<'a>{
         }
 
         self.set_error_estimate(None);
+        self.set_d_lambda(None);
+        
     }
 
     // rk4 scheme with error estimation and stepsize  (embedded  method)
     // for numbers, see https://en.wikipedia.org/wiki/List_of_Runge%E2%80%93Kutta_methods
-    fn rk5_stepper(&mut self, d_lambda : f64) {
-        unimplemented!();
+    fn rk5_stepper(&mut self, d_lambda : f64, precision: f64) {
+        let butcher_tableau: [[f64;5];5] = [
+            [1.0/4.0,          0.0,                0.0,            0.0,            0.0],
+            [3.0/32.0,         9.0/32.0,           0.0,            0.0,            0.0],
+            [1932.0/2197.0,    -7200.0/2197.0,     7296.0/2197.0,  0.0,            0.0],
+            [439.0/216.0,      -8.0,     	        3680.0/513.0,   -845.0/4104.0,  0.0],
+            [-8.0/27.0, 	    2.0,      	        -3544.0/2565.0, 1859.0/4104.0,  -11.0/40.0],
+        ];
+
+        let _ = [ 
+            0.0,
+            1.0/4.0,
+            3.0/8.0,
+            12.0/13.0,
+            1.0,
+            0.5
+        ];
+
+        let b_coeff = [
+            16.0/135.0,	
+            0.0, 
+            6656.0/12825.0,	
+            28561.0/56430.0, 
+            -9.0/50.0,	
+            2.0/55.0
+        ];
+
+        let b_star_coeff = [
+            25.0/216.0,	
+            0.0,	
+            1408.0/2565.0,	
+            2197.0/4104.0,	
+            -1.0/5.0,	
+            0.0,
+        ];
+
+
+        let y0_mom = self.get_momenta_patch();
+        let y0_coor = self.get_coordinates_patch();
+
+        let mut k_i: Vec< [[f64;4];2] > = Vec::with_capacity(6);
+
+        for i in 0..6 {
+            let [coor_arg,mom_arg ] = {
+                let [mut new_coor,mut new_mom] = [
+                    [0.0,0.0,0.0,0.0],
+                    [0.0,0.0,0.0,0.0],
+                ];
+
+                for j in 0..i{
+                    let fact = butcher_tableau[i-1][j];
+                    for s in 0..4 {
+                        new_coor[s] += fact* k_i[j][0][s];
+                        new_mom[s] += fact* k_i[j][1][s];
+                    }
+                }
+
+                for i in 1..4{
+                    new_coor[i] += y0_coor[i];
+                    new_mom[i] += y0_mom[i];
+                }
+
+                [new_coor, new_mom]
+            };
+
+            let mut new_k_i = self.get_vector_derivative( &coor_arg, &mom_arg  );
+
+            for i in 0..4{
+                new_k_i[0][i] *= d_lambda;
+                new_k_i[1][i] *= d_lambda;
+            }
+
+            k_i.push( new_k_i );
+        }
+
+        
+
+        // synthesis
+        let mut_coor = self.get_mut_coordinates_patch();
+       
+        for j in 0..6{
+            for i in 0..4{
+                mut_coor[i] += k_i[j][0][i]*b_star_coeff[j];
+            }
+        }
+
+        let mut_mom = self.get_mut_momenta_patch();
+        for j in 0..6{
+            for i in 0..4{
+                mut_mom[i] +=  k_i[j][1][i]*b_star_coeff[j];
+            }
+        }
+
+        let err: f64 = {
+            let [mut err_coor,mut err_mom] = [
+                [0.0,0.0,0.0,0.0],
+                [0.0,0.0,0.0,0.0],
+            ];
+
+            for j in 0..6{
+                let fact = b_coeff[j]-b_star_coeff[j];
+                for i in 1..4 {
+                    err_coor[i] += fact*k_i[j][0][i];
+                    err_mom[i] += fact*k_i[j][1][i];
+                }
+
+            }
+
+            let mut err = 0.0;
+            for i in 0..4{
+                err += err_coor[i].powi(2) + err_mom[i].powi(2);
+            }
+
+            ( err/8.0 ).sqrt()
+        };
+
+        self.set_error_estimate(Some(err));
+        self.set_d_lambda( Some(0.7*d_lambda*  ( precision/err ).powf(0.2) )  );//0.9: safety factor
+
     }
 
     // used to recover from inaccurate steps
@@ -169,6 +291,7 @@ impl<'a> Metric<'a> for SchwarzschildMetric {
              backup_patch_coordinates : coordinates,
              backup_patch_momenta: momenta, 
              backup_coordinate_patch: 0, 
+             d_lambda: 0.0,
         };        
 
         res.sanitize_coordinates();
@@ -267,6 +390,7 @@ pub struct SchwarzschildObject <'a> {
     backup_patch_coordinates : [f64;4],
     backup_patch_momenta :  [f64;4],
     backup_coordinate_patch: u8,
+    d_lambda: f64,
 }
 
 impl<'a> SpaceObject<'a> for SchwarzschildObject<'a>{
@@ -333,24 +457,6 @@ impl<'a> SpaceObject<'a> for SchwarzschildObject<'a>{
     }
 
     fn sanitize_coordinates(&mut self) {
-        
-        let mut mut_coor = self.patch_coordinates;
-        let mut mut_mom = self.patch_momenta;
-
-        // if mut_coor[3] < 0.0 {
-        //     mut_coor[3]   *= -1.0 ;
-        //     mut_mom[3] *= -1.0;
-        //     mut_coor[2] -= std::f64::consts::PI;
-
-        //     //self.reset_killing_const();
-
-        // } else if mut_coor[3] >std::f64::consts::PI {
-        //     mut_coor[3]  = 2.0*std::f64::consts::PI -  mut_coor[3];
-        //     mut_mom[3] *= -1.0;
-        //     mut_coor[2] += std::f64::consts::PI;
-
-        //     //self.reset_killing_const();
-        // }
 
         self.patch_coordinates[2] = self.patch_coordinates[2]%(std::f64::consts::PI*2.0);
 
@@ -379,8 +485,6 @@ impl<'a> SpaceObject<'a> for SchwarzschildObject<'a>{
     }
 
 
-    
-
     fn get_error_estimate(&self)->f64{
         self.error_estimate
     }
@@ -406,42 +510,41 @@ impl<'a> SpaceObject<'a> for SchwarzschildObject<'a>{
     }
 
 
+    fn get_d_lambda(&self) -> f64 {
+        return self.d_lambda;
+    }
+
     //got estimate from https://arxiv.org/pdf/1303.5057.pdf
-
-    fn estimate_d_lambda(&self)-> f64{
-        let mom = self.patch_momenta;
-        let coor = self.patch_coordinates;
-
-        let estimate1 = self.metric.delta/( (mom[1]/coor[1]).abs()+mom[3].abs()+mom[2].abs());
-        let estimate2 = (coor[1]-self.metric.r_s)/(2.0* mom[1].abs());
+    fn set_d_lambda(&mut self, d_lambda: Option<f64>){
+        match d_lambda {
+            Some(x) => self.d_lambda = x,
+            None=>{
+                let mom = self.patch_momenta;
+                let coor = self.patch_coordinates;
         
-        let min = if estimate1 < estimate2 {
-            estimate1
-        }else{
-
-            //println!("r estimate");
-            estimate2
-        };
-
-        return if self.metric.max_step< min {
-           self.metric.max_step
-        } else {
-            min
-        }  
+                let estimate1 = self.metric.delta/( (mom[1]/coor[1]).abs()+mom[3].abs()+mom[2].abs());
+                let estimate2 = (coor[1]-self.metric.r_s)/(2.0* mom[1].abs());
+                
+                let min = if estimate1 < estimate2 {
+                    estimate1
+                }else{
+                    estimate2
+                };
+        
+                return if self.metric.max_step< min {
+                   self.d_lambda =  self.metric.max_step;
+                } else {
+                    self.d_lambda = min;
+                }  
+            }
+        }
+      
     }
 }
 
 //XYZ->YZX
 
 impl<'a> SchwarzschildObject<'a>{
-
-    fn get_patch(&self)->u8{
-        self.coordinate_patch
-    }
-
-    fn set_patch(&mut self, patch: u8){
-        self.coordinate_patch = patch;
-    }
 
     fn rotate_coordinate_patch(&self)->  [[f64;3];2]  {
         
@@ -676,8 +779,11 @@ impl<'a> SpaceObject<'a> for MinkowskiObject<'a>{
     }
 
     
-    fn estimate_d_lambda(&self)->f64{
+    fn get_d_lambda(&self)->f64{
         self.metric.d_lambda
+    }
+
+    fn set_d_lambda(&mut self, _: Option<f64>) {
     }
 
     fn restore_state(&mut self){
@@ -697,21 +803,22 @@ impl<'a> SpaceObject<'a> for MinkowskiObject<'a>{
 // implemntation of kerr metric with hamiltonian equations of motion
 ////////////////////////////////////////////////////////////////////
 
+#[allow(non_snake_case)]
 pub struct KerrMetric {
     pub M : f64,
     pub J : f64,
     pub a:f64,
     pub r_s:f64,
-    pub step_parameter:f64,
+    pub step_precision:f64,
 }
 
-pub fn new_Kerr_metric( J:f64, step_parameter: f64) -> KerrMetric {
+pub fn new_kerr_metric( j:f64, step_parameter: f64) -> KerrMetric {
     KerrMetric {
         M:1.0,
-        J:J,
-        a: J,
+        J:j,
+        a: j,
         r_s:2.0,
-        step_parameter: step_parameter,
+        step_precision: step_parameter,
     }
 }
 
@@ -780,6 +887,7 @@ impl<'a> Metric<'a> for KerrMetric {
              error_estimate : 0.0,
              backup_coordinates : [ 0.0, 0.0, 0.0, 0.0],
              backup_momenta: [ 0.0, 0.0, 0.0, 0.0],
+             d_lambda: 0.01,
         };        
 
         res.sanitize_coordinates();
@@ -828,6 +936,7 @@ pub struct KerrObject <'a> {
     error_estimate : f64,
     backup_coordinates : [f64;4], 
     backup_momenta :  [f64;4],
+    d_lambda: f64,
 }
 
 impl<'a> SpaceObject<'a> for KerrObject<'a>{
@@ -860,6 +969,7 @@ impl<'a> SpaceObject<'a> for KerrObject<'a>{
     }
 
     // information taken from https://arxiv.org/pdf/1601.02063.pdf
+    #[allow(non_snake_case)]
     fn get_vector_derivative(&self, coor: &[f64;4], mom: &[f64;4] ) -> [[f64;4];2]{
         let mom_contra = self.metric.to_contravariant_vector( coor, mom);
         let metr = self.metric;
@@ -942,13 +1052,22 @@ impl<'a> SpaceObject<'a> for KerrObject<'a>{
         }
     }
 
-    fn estimate_d_lambda(&self)-> f64{
-        //todo
-        self.metric.step_parameter
+
+    fn set_d_lambda(&mut self, d_lambda: Option<f64>) {
+        match d_lambda {
+            Some(x) => self.d_lambda = x,
+            None => {
+                panic!{"not implemented"};
+            },
+        }
+    }
+
+    fn get_d_lambda(&self)-> f64{
+       self.d_lambda
     }
 
     fn take_step(&mut self, d_lambda : f64){
-        self.rk5_stepper(d_lambda);
+        self.rk5_stepper(d_lambda, self.metric.step_precision);
     }
 
     fn restore_state(&mut self){
@@ -966,6 +1085,8 @@ impl<'a> SpaceObject<'a> for KerrObject<'a>{
 impl<'a> KerrObject<'a>{
 
     //https://arxiv.org/pdf/1601.02063.pdf
+
+    #[allow(non_snake_case)]
     fn reset_killing_const(&mut self){
         let mom = self.momenta;
         let coor = self.coordinates;
@@ -1025,7 +1146,7 @@ pub fn cart_to_kerr (coordinates: &[f64;3], momenta: &[f64;3],a:f64) -> [ [f64;3
     ];
 
     let a_r = (r.powi(2)+a.powi(2)).sqrt();
-    let N = (theta.cos()*a).powi(2)+r.powi(2);
+    let n = (theta.cos()*a).powi(2)+r.powi(2);
 
     let hc = theta.cos();
     let hs = theta.sin();
@@ -1033,9 +1154,9 @@ pub fn cart_to_kerr (coordinates: &[f64;3], momenta: &[f64;3],a:f64) -> [ [f64;3
     let ps = phi.sin();
     
     let newmom =  [ 
-        a_r*r/N*hs*pc* momenta[0] + a_r*r/N*hs*ps*momenta[1]+ a_r.powi(2)/N*hc*momenta[2],
+        a_r*r/n*hs*pc* momenta[0] + a_r*r/n*hs*ps*momenta[1]+ a_r.powi(2)/n*hc*momenta[2],
         -ps/(a_r* hs)*momenta[0] + pc/(a_r* hs) *momenta[1],
-        a_r/N*hc*pc*momenta[0] + a_r/N*hc*ps*momenta[1]-r/N*hs*momenta[2]
+        a_r/n*hc*pc*momenta[0] + a_r/n*hc*ps*momenta[1]-r/n*hs*momenta[2]
     ];
 
     [newpos,newmom]

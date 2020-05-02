@@ -888,6 +888,7 @@ impl<'a> Metric<'a> for KerrMetric {
              backup_coordinates : [ 0.0, 0.0, 0.0, 0.0],
              backup_momenta: [ 0.0, 0.0, 0.0, 0.0],
              d_lambda: 0.01,
+             backup_d_lambda: 0.01,
         };        
 
         res.sanitize_coordinates();
@@ -937,6 +938,7 @@ pub struct KerrObject <'a> {
     backup_coordinates : [f64;4], 
     backup_momenta :  [f64;4],
     d_lambda: f64,
+    backup_d_lambda : f64,
 }
 
 impl<'a> SpaceObject<'a> for KerrObject<'a>{
@@ -1039,7 +1041,6 @@ impl<'a> SpaceObject<'a> for KerrObject<'a>{
         self.mass
     }
 
-    
 
     fn get_error_estimate(&self)->f64{
         self.error_estimate
@@ -1048,7 +1049,7 @@ impl<'a> SpaceObject<'a> for KerrObject<'a>{
     fn set_error_estimate(&mut self, err: Option<f64>){
         match err{
             Some(x) => self.error_estimate = x,
-            None => panic!("no automatic error estimate for minkowski implemented")
+            None => panic!("no automatic error estimate for kerr implemented")
         }
     }
 
@@ -1071,14 +1072,17 @@ impl<'a> SpaceObject<'a> for KerrObject<'a>{
     }
 
     fn restore_state(&mut self){
+
         self.coordinates = self.backup_coordinates.clone();
         self.momenta= self.backup_momenta.clone();
+        self.d_lambda = self.backup_d_lambda;
       
     }
 
     fn store_state(&mut self){
         self.backup_coordinates = self.coordinates.clone();
         self.backup_momenta= self.momenta.clone();
+        self.backup_d_lambda = self.d_lambda;
     }
 }
 

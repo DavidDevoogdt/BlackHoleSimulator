@@ -11,107 +11,62 @@ use self::image::{ImageBuffer, RgbImage};
 use std::path::Path;
 
 
-/// setup1: launch parallel photons in the direction of the black hole an watch it bend
-// generate photons on line (x,y,z) = (-distance,0,i*spacing ), i=0..number going in the +x direction
-fn generate_parallel_photons<'a>( distance : f64, spacing: f64, number: i32, metric : &'a  curved_space::SchwarzschildMetric ) -> Vec< curved_space::SchwarzschildObject<'a>  > {
-    let mut a :Vec< curved_space::SchwarzschildObject  > = Vec::new(); 
-    for i in 0..number {
-        
-        a.push( metric.spawn_space_object_from_cartesian( [ 0.0,-distance, 0.0,(i as f64)*spacing,],
-          [1.0,1.0,0.0,0.0,] , 0.0 ))
-    }
-    return a;
-}
-
-fn generate_parallel_photons_kerr<'a>( distance : f64, spacing: f64, number: i32, metric : &'a  curved_space::KerrMetric ) -> Vec< curved_space::KerrObject<'a>  > {
-    let mut a :Vec< curved_space::KerrObject > = Vec::new(); 
-    for i in 0..number {
-        
-        a.push( metric.spawn_space_object_from_cartesian( [ 0.0,-distance, 0.0,(i as f64)*spacing,],
-          [1.0,1.0,0.0,0.0,] , 0.0 ))
-    }
-
-    return a;
-}
-
-pub fn launch_parallel_photons(){
-
-    let num_photons = 50;
-    let mut results : Vec<Vec<[[f64;4];2]>> = Vec::new();
-
-    let metric = curved_space::new_schwarzschild_metric(
-        1.0,
-        1.0/32.0,
-        0.15,
-    );
-
-    let mut photons  = generate_parallel_photons(5.0,0.2,num_photons , & metric);
-
-    for (i,x) in photons.iter_mut().enumerate() {
-
-        let mut v : Vec<[[f64;4];2]> = Vec::new();
-
-        // println!("{}",x);
-      
-        for _ in 0..2000 {
-            
-            v.push( x.calculate_cartesian_coordinates_and_momenta() ); //creates a copy to push
-            x.take_step(0.01);
-
-            if x.get_coordinates_patch()[1] < 1.05 {
-                break;
-            }
-        
-        } 
-
-        let _ = python_interface::save_to_csv( &v, format!("files/photon{}.csv", i));
-
-        results.push(v);
-    }
-
-    python_interface::launch_python(num_photons, "xz" ); 
-}
 //
-
-
 pub fn launch_parallel_photons_kerr(){
+    let M= 1.0;
+    let J = 0.0;
+    let a = J;
+    let r_s: f64 =2.0;
 
-    let num_photons = 50;
-    let mut results : Vec<Vec<[[f64;4];2]>> = Vec::new();
+    let direction = [1.0, 0.0, 1.0];
+    let center =[-5.0,  0.0, 0.0];
+    let inc_vector = [0.0, 0.0, 0.1];
 
-    let metric = curved_space::new_kerr_metric(
-        0.0,
-        1e-1
+    let metric = curved_space::new_kerr_metric(J,  1e-6);
+   
+    let black_sphere = ray_tracer::Sphere{
+        color1: image::Rgb([0,0,0]),
+        color2: image::Rgb([0,0,0]),
+        radius: 1.0001*(r_s + (r_s.powi(2)-4.0*a.powi(2)).sqrt()  )/2.0,
+        divisions: 10.0,
+    };
+
+    let image = image::open("src_files/equirect.png").unwrap().into_rgb();
+    //let image = image::open("src_files/ESO_-_Milky_Way.jpg").unwrap().into_rgb();
+    //let image = image::open("src_files/download.jpeg").unwrap().into_rgb();
+    
+    let (xres,yres) = image.dimensions();
+ 
+    let skybox = ray_tracer::SkyboxKerr{
+        image: image,
+        radius: 20.0,
+        x_res: xres as i32,
+        y_res : yres as i32,
+        phi_offset: -90.0/180.0* std::f64::consts::PI,
+        a: a,
+    };
+
+
+    let col_objects : Vec< Box< dyn ray_tracer::CollsionObject> > = vec![
+        Box::new( black_sphere),
+        Box::new( skybox),
+
+    ];
+   
+    let mut ray_tracer = ray_tracer::new_parallel( 
+        &metric,
+        &col_objects,
+        direction,
+        center ,
+        inc_vector,
+        100,
+        1000,
     );
 
-    let mut photons  = generate_parallel_photons_kerr(5.0,0.2,num_photons , & metric);
+    ray_tracer.run_simulation( 1e-6 );
+    ray_tracer.plot_paths("xyz");
 
-    for (i,x) in photons.iter_mut().enumerate() {
-
-        let mut v : Vec<[[f64;4];2]> = Vec::new();
-
-        // println!("{}",x);
-      
-        for _ in 0..2000 {
-            
-            v.push( x.calculate_cartesian_coordinates_and_momenta() ); //creates a copy to push
-            x.take_step(0.01);
-
-            if x.get_coordinates_patch()[1] < 1.05 {
-                break;
-            }
-        
-        } 
-
-        let _ = python_interface::save_to_csv( &v, format!("files/photon{}.csv", i));
-
-        results.push(v);
-    }
-
-    python_interface::launch_python(num_photons, "xz" ); 
 }
-
-
 
 //////
 /// 
@@ -124,11 +79,11 @@ pub fn ray_trace_kerr(){
     let a = J;
     let r_s: f64 =2.0;
 
-    let metric = curved_space::new_kerr_metric(J,  1e-8);
+    let metric = curved_space::new_kerr_metric(J,  1e-7);
 
 
     let camera = ray_tracer::Camera{ 
-        pos : [0.0,-30.0,0.0],
+        pos : [0.01,-30.0,0.0],
         direction : [0.0,1.0,0.0],
         x_res : 1920,
         y_res : 1080,
@@ -139,7 +94,8 @@ pub fn ray_trace_kerr(){
     };
 
     //let image = image::open("src_files/milky_way_equirectangular.png").unwrap().into_rgb();
-    let image = image::open("src_files/ESO_-_Milky_Way.jpg").unwrap().into_rgb();
+    let image = image::open("src_files/equirect.png").unwrap().into_rgb();
+    //let image = image::open("src_files/ESO_-_Milky_Way.jpg").unwrap().into_rgb();
     //let image = image::open("src_files/download.jpeg").unwrap().into_rgb();
     
     let (xres,yres) = image.dimensions();
@@ -176,7 +132,7 @@ pub fn ray_trace_kerr(){
         false,
     );
 
-    ray_tracer.run_simulation(1, 1e-6 );
+    ray_tracer.run_simulation( 1e-7 );
 
     ray_tracer.generate_image("src_files/schw800x800.bmp");
 
@@ -264,7 +220,7 @@ pub fn ray_trace_schwarzshild(){
     );
 
     
-    ray_tracer.run_simulation(1, 1e1 );
+    ray_tracer.run_simulation( 1e1 );
 
     //ray_tracer.plot_paths();
     ray_tracer.generate_image("src_files/schw800x800.bmp");
@@ -333,7 +289,7 @@ pub fn ray_trace_minkowski(){
     );
 
     
-    ray_tracer.run_simulation(5, 1e-3  );
+    ray_tracer.run_simulation( 1e-3  );
 
 
     ray_tracer.generate_image("files/flat800x800.bmp");
@@ -415,7 +371,7 @@ fn test_wavelentgh_convo (){
         true,
     );
 
-    ray_tracer.run_simulation(1, 1e-3 );
+    ray_tracer.run_simulation( 1e-3 );
 
 
     ray_tracer.plot_paths( "xz");

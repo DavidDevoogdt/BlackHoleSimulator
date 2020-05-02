@@ -9,10 +9,16 @@ pub mod black_body;
 
 fn main() {
     //test_setups::launch_parallel_photons();
+    test_setups::launch_parallel_photons_kerr();
+
+    //test_setups::test_coordinate_system();
     
-    println!("plotting in curved space!");
-    test_setups::ray_trace_schwarzshild();
+    //println!("plotting in curved space!");
+    //test_setups::ray_trace_schwarzshild();
     
+    //println!("plotting in kerr space!");
+    //test_setups::ray_trace_kerr();
+
     //println!("plotting in flat space!");
     //test_setups::ray_trace_minkowski();
     

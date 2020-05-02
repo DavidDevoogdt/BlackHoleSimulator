@@ -847,7 +847,9 @@ impl<'a> Metric<'a> for KerrMetric {
     }
 
     fn g_upper(&self, x0 :u8, x1 :u8,coor :&[f64;4]) -> f64{
-        let det = -(self.get_delta(coor) * coor[3].sin().powi(2));
+       
+        let rrs = self.r_s*coor[1]/self.get_sigma( coor );    
+        let det = coor[3].sin().powi(2)*( self.a.powi(2)*( coor[3].cos().powi(2)*rrs-1.0) + coor[1].powi(2)*(rrs-1.0)    );
 
         match (x0,x1){
             (0,0)=> self.g_lower(2,2,coor)/det ,

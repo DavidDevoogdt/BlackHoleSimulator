@@ -19,3 +19,6 @@ Cargo.lock
 /files/*
 .vscode/launch.json
 .vscode/tasks.json
+src_files/calculations.mw
+src_files/picture01.bmp
+src_files/schw800x800 copy.bmp

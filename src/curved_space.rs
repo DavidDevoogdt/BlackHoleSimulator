@@ -825,7 +825,7 @@ pub fn new_kerr_metric( j:f64, step_parameter: f64) -> KerrMetric {
 impl KerrMetric {
 
     fn get_sigma(&self, coor :&[f64;4])->f64{
-        coor[1].powi(2) + (self.a* coor[2].cos()).powi(2) 
+        coor[1].powi(2) + (self.a* coor[3].cos()).powi(2) 
     }
 
     fn get_delta(&self, coor:&[f64;4] )->f64{
@@ -895,6 +895,7 @@ impl<'a> Metric<'a> for KerrMetric {
 
         res.sanitize_coordinates();
         res.reset_killing_const();
+        res.store_state();
 
         res
     }

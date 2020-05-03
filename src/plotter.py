@@ -43,8 +43,8 @@ elif name == 'xyz':
 
     #plt.axis('equal')
     plt.xlim(-10,10)
-    plt.ylim(-5,5)
-    ax.set_zlim(-5,5)
+    plt.ylim(-10,10)
+    ax.set_zlim(-10,10)
 
     for i in range(0,N):
         db = pd.read_csv( 'files/photon%d.csv'%i, names=['t','x','y','z','pt','px','py','pz'])  

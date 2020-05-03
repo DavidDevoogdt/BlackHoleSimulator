@@ -70,7 +70,7 @@ impl<'a,T: curved_space::Metric<'a>  > RayTracer<'a,T> {
                     photon.path.push(  photon.dynamic.calculate_cartesian_coordinates_and_momenta() );  
                     }
                 }else{
-
+                    
                     photon.dynamic.restore_state();
                     photon.dynamic.set_d_lambda(Some( 0.5*photon.dynamic.get_d_lambda())  );
                 }      
@@ -340,7 +340,8 @@ impl CollsionObject for SphereCart{
 pub struct Annulus {
     pub radius1 : f64,
     pub radius2 : f64,
-    pub divisions : f64,
+    pub divisions_radial : i32,
+    pub divisions_angular : i32,
     pub color1 : image::Rgb<u8>,
     pub color2 : image::Rgb<u8>,
 }
@@ -348,7 +349,8 @@ pub struct Annulus {
 pub struct AnnulusCart {
     pub radius1 : f64,
     pub radius2 : f64,
-    pub divisions : f64,
+    pub divisions_radial : i32,
+    pub divisions_angular : i32,
     pub color1 : image::Rgb<u8>,
     pub color2 : image::Rgb<u8>,
 }
@@ -358,6 +360,9 @@ impl CollsionObject for Annulus{
     fn  detect_collision (& self, old: &[f64;4], new: &[f64;4], _:  &[f64;4]) -> Option < image::Rgb<u8>>{  
         let dtheta1= std::f64::consts::PI / 2.0 - new[3];
         let dtheta2 = std::f64::consts::PI / 2.0 - old[3]; 
+
+
+
         //theta switches side
         if  dtheta1*dtheta2< 0.0 {
             if  (dtheta1-dtheta2).abs() <= 0.5 {
@@ -365,14 +370,14 @@ impl CollsionObject for Annulus{
 
                 let r = perc*new[1] + (1.0-perc)*old[1];
 
-
                 if r >= self.radius1 &&  r <= self.radius2 {  
 
-                    let phi = perc*new[2] + (1.0-perc)*old[2];
+                    let phi = perc*new[2] + (1.0-perc)*old[2]  +1.0;  
+                   
+                    let rfact  = ((self.divisions_radial as f64) * (r-self.radius1) / ( self.radius2-self.radius1))  as i32;
+                    let p =  ((self.divisions_angular as f64) * phi / ( 2.0*std::f64::consts::PI))  as i32; 
 
-                    let p =  (self.divisions * phi / ( std::f64::consts::PI).round()  )as i64; 
-
-                    if p%2==0 {
+                    if (p+rfact).rem_euclid(2)==0 {
                         return  Some( self.color1);
                     }
 
@@ -403,7 +408,7 @@ impl CollsionObject for AnnulusCart{
                 
                 let phi =  new[2].atan2(new[1]);
 
-                let p =  (self.divisions * phi / ( std::f64::consts::PI).round()  )as i64; 
+                let p =  (self.divisions_radial as f64 * phi / ( std::f64::consts::PI).round()  )as i64; 
 
                 if p%2==0 {
                     return  Some( self.color1);
@@ -463,8 +468,8 @@ impl CollsionObject for SkyboxKerr {
             let phi = cart_mom[1].atan2( cart_mom[0] );
 
 
-            let xcoor = (( (self.x_res as f64) * (  ( phi+self.phi_offset + std::f64::consts::PI )/(2.0* std::f64::consts::PI))) as i32  ).rem_euclid( self.x_res) ;
-            let ycoor = ( (self.y_res as f64) * (  ( theta                )/(     std::f64::consts::PI))) as i32;
+            let xcoor = (( (self.x_res as f64) * (  ( phi+self.phi_offset + std::f64::consts::PI )/(2.0* std::f64::consts::PI))).round() as i32  ).rem_euclid( self.x_res) ;
+            let ycoor = (( (self.y_res as f64) * (  ( theta                )/(     std::f64::consts::PI))).round() as i32).rem_euclid( self.y_res);
 
             return Some( *self.image.get_pixel(xcoor as u32, ycoor as u32) )
             //return Some( image::Rgb([ (xcoor*255/self.x_res).try_into().unwrap() ,0,0]) )

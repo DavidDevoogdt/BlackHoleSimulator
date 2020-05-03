@@ -14,15 +14,22 @@ use std::path::Path;
 //
 pub fn launch_parallel_photons_kerr(){
     let M= 1.0;
-    let J = 0.0;
+    let J = 1.0;
     let a = J;
     let r_s: f64 =2.0;
 
-    let direction = [1.0, 0.0, 1.0];
-    let center =[-5.0,  0.0, 0.0];
+    let direction = [0.0, 1.0, 0.0];
+    let center =[0.0,  0.0, 1.0];
+    let inc_vector    = [0.0, 1.0, 0.0]; 
+
+
+    let center =[-5.0,  1.0, 0.0];
     let inc_vector = [0.0, 0.0, 0.1];
 
-    let metric = curved_space::new_kerr_metric(J,  1e-6);
+
+    let accuracy = 1e-5;
+
+    let metric = curved_space::new_kerr_metric(J,  accuracy);
    
     let black_sphere = ray_tracer::Sphere{
         color1: image::Rgb([0,0,0]),
@@ -31,8 +38,8 @@ pub fn launch_parallel_photons_kerr(){
         divisions: 10.0,
     };
 
-    let image = image::open("src_files/equirect.png").unwrap().into_rgb();
-    //let image = image::open("src_files/ESO_-_Milky_Way.jpg").unwrap().into_rgb();
+    //let image = image::open("src_files/equirect.png").unwrap().into_rgb();
+    let image = image::open("src_files/ESO_-_Milky_Way.jpg").unwrap().into_rgb();
     //let image = image::open("src_files/download.jpeg").unwrap().into_rgb();
     
     let (xres,yres) = image.dimensions();
@@ -63,7 +70,7 @@ pub fn launch_parallel_photons_kerr(){
         1000,
     );
 
-    ray_tracer.run_simulation( 1e-6 );
+    ray_tracer.run_simulation( accuracy );
     ray_tracer.plot_paths("xyz");
 
 }
@@ -75,27 +82,30 @@ pub fn launch_parallel_photons_kerr(){
 pub fn ray_trace_kerr(){
 
     let M= 1.0;
-    let J = 0.95;
+    let J = 0.8;
     let a = J;
     let r_s: f64 =2.0;
 
-    let metric = curved_space::new_kerr_metric(J,  1e-7);
+    let accuracy = 1e-6;
+
+
+    let metric = curved_space::new_kerr_metric(J,  accuracy);
 
 
     let camera = ray_tracer::Camera{ 
-        pos : [0.01,-30.0,0.0],
-        direction : [0.0,1.0,0.0],
-        x_res : 1920,
-        y_res : 1080,
-        distance: 0.05,
+        pos : [-30.0,0.0,5.0],
+        direction : [1.0,0.0,-5.0/30.0],
+        x_res : 1920/2,
+        y_res : 1080/2,
+        distance: 0.07,
         width: 0.16,
         height : 0.09,
         rotation_angle :0.0/360.0*(2.0*std::f64::consts::PI),
     };
 
     //let image = image::open("src_files/milky_way_equirectangular.png").unwrap().into_rgb();
-    let image = image::open("src_files/equirect.png").unwrap().into_rgb();
-    //let image = image::open("src_files/ESO_-_Milky_Way.jpg").unwrap().into_rgb();
+    //let image = image::open("src_files/equirect.png").unwrap().into_rgb();
+    let image = image::open("src_files/ESO_-_Milky_Way.jpg").unwrap().into_rgb();
     //let image = image::open("src_files/download.jpeg").unwrap().into_rgb();
     
     let (xres,yres) = image.dimensions();
@@ -104,38 +114,46 @@ pub fn ray_trace_kerr(){
 
     let skybox = ray_tracer::SkyboxKerr{
         image: image,
-        radius: 40.0,
+        radius: 80.0,
         x_res: xres as i32,
         y_res : yres as i32,
-        phi_offset: -90.0/180.0* std::f64::consts::PI,
+        phi_offset: -0.0/180.0* std::f64::consts::PI,
         a: a,
     };
    
     let black_sphere = ray_tracer::Sphere{
         color1: image::Rgb([0,0,0]),
         color2: image::Rgb([0,0,0]),
-        radius: 1.001*(r_s + (r_s.powi(2)-4.0*a.powi(2)).sqrt()  )/2.0,
+        radius: 1.0001*(r_s + (r_s.powi(2)-4.0*a.powi(2)).sqrt()  )/2.0,
         divisions: 10.0,
     };
 
+    let accretion_disk = ray_tracer::Annulus{
+        color1: image::Rgb([255,0,0]),
+        color2: image::Rgb([0,0,255]),
+        radius1: 3.0*(r_s + (r_s.powi(2)-4.0*a.powi(2)).sqrt()  )/2.0,
+        radius2: 7.0*(r_s + (r_s.powi(2)-4.0*a.powi(2)).sqrt()  )/2.0,
+        divisions_angular: 40,
+        divisions_radial: 8,
+    };
 
     let col_objects : Vec< Box< dyn ray_tracer::CollsionObject> > = vec![
         Box::new( black_sphere),
         Box::new(skybox),
+        Box::new(accretion_disk),
     ];
    
     let mut ray_tracer = ray_tracer::new( 
         camera,
         &col_objects,
         &metric,
-        1000 ,
+        10000 ,
         false,
     );
 
-    ray_tracer.run_simulation( 1e-7 );
+    ray_tracer.run_simulation( accuracy );
 
-    ray_tracer.generate_image("src_files/schw800x800.bmp");
-
+    ray_tracer.generate_image("src_files/kerr.bmp");
 }
 
 
@@ -157,59 +175,92 @@ pub fn ray_trace_schwarzshild(){
         max_step: 2.0,
     };
 
+   
     let camera = ray_tracer::Camera{ 
-        pos : [ -15.0,0.0,2.0],
-        direction : [1.0,0.0,0.0],
-        x_res : 1920/10,
-        y_res : 1080/10,
-        distance: 0.1,
+        pos : [0.0,-30.0,5.0],
+        direction : [0.0,1.0,-5.0/30.0],
+        x_res : 1920,
+        y_res : 1080,
+        distance: 0.07,
         width: 0.16,
         height : 0.09,
         rotation_angle :0.0/360.0*(2.0*std::f64::consts::PI),
     };
 
-
-    // let black_sphere = ray_tracer::Sphere{
-    //     color1: image::Rgb([0,0,0]),
-    //     color2: image::Rgb([0,0,0]),
-    //     radius: 1.01*r_s,
-    //     divisions: 10.0,
-    // };
-
-    let colored_sphere = ray_tracer::Sphere{
-        color1: image::Rgb([0,255,0]),
-        color2: image::Rgb([255,255,255]),
-        radius: 1.001*r_s,
-        divisions: 5.0,
-    };
+    //let image = image::open("src_files/milky_way_equirectangular.png").unwrap().into_rgb();
+    //let image = image::open("src_files/equirect.png").unwrap().into_rgb();
+    let image = image::open("src_files/ESO_-_Milky_Way.jpg").unwrap().into_rgb();
+    //let image = image::open("src_files/download.jpeg").unwrap().into_rgb();
     
+    let (xres,yres) = image.dimensions();
+
+    //todo: implement proper skybox for kerr metric
+
+    let skybox = ray_tracer::Skybox{
+        image: image,
+        radius: 80.0,
+        x_res: xres as i32,
+        y_res : yres as i32,
+        phi_offset: -0.0/180.0* std::f64::consts::PI,
+    };
+   
+    let black_sphere = ray_tracer::Sphere{
+        color1: image::Rgb([0,0,0]),
+        color2: image::Rgb([0,0,0]),
+        radius: 1.0001*r_s,
+        divisions: 10.0,
+    };
+
     let accretion_disk = ray_tracer::Annulus{
         color1: image::Rgb([255,0,0]),
         color2: image::Rgb([0,0,255]),
         radius1: 3.0*r_s,
         radius2: 7.0*r_s,
-        divisions: 10.0,
+        divisions_angular: 10,
+        divisions_radial: 4,
     };
-    
-    
-    let image = image::open("src_files/ESO_-_Milky_Way.jpg").unwrap().into_rgb();
-    //let image = image::open("src/download.jpeg").unwrap().into_rgb();
-    let (xres,yres) = image.dimensions();
 
-    let skybox = ray_tracer::Skybox{
-        image: image,
-        radius: 20.0,
-        x_res: xres as i32,
-        y_res : yres as i32,
-        phi_offset: std::f64::consts::PI,
-    };
-   
     let col_objects : Vec< Box< dyn ray_tracer::CollsionObject> > = vec![
-        //Box::new(black_sphere),
-        Box::new(colored_sphere),
+        Box::new( black_sphere),
+        Box::new(skybox),
         Box::new(accretion_disk),
-        Box::new(skybox)
     ];
+
+    // let colored_sphere = ray_tracer::Sphere{
+    //     color1: image::Rgb([0,255,0]),
+    //     color2: image::Rgb([255,255,255]),
+    //     radius: 1.001*r_s,
+    //     divisions: 5.0,
+    // };
+    
+    // let accretion_disk = ray_tracer::Annulus{
+    //     color1: image::Rgb([255,0,0]),
+    //     color2: image::Rgb([0,0,255]),
+    //     radius1: 3.0*r_s,
+    //     radius2: 7.0*r_s,
+    //     divisions_angular: 10,
+    //     divisions_radial: 5,
+    // };
+    
+    
+    // let image = image::open("src_files/ESO_-_Milky_Way.jpg").unwrap().into_rgb();
+    // //let image = image::open("src/download.jpeg").unwrap().into_rgb();
+    // let (xres,yres) = image.dimensions();
+
+    // let skybox = ray_tracer::Skybox{
+    //     image: image,
+    //     radius: 20.0,
+    //     x_res: xres as i32,
+    //     y_res : yres as i32,
+    //     phi_offset: std::f64::consts::PI,
+    // };
+   
+    // let col_objects : Vec< Box< dyn ray_tracer::CollsionObject> > = vec![
+    //     //Box::new(black_sphere),
+    //     Box::new(colored_sphere),
+    //     Box::new(accretion_disk),
+    //     Box::new(skybox)
+    // ];
    
     let mut ray_tracer = ray_tracer::new( 
         camera,
@@ -260,7 +311,8 @@ pub fn ray_trace_minkowski(){
         color2: image::Rgb([0,0,255]),
         radius1: 3.0*r_s,
         radius2: 6.0*r_s,
-        divisions: 10.0,
+        divisions_angular: 10,
+        divisions_radial: 5,
     };  
 
     let image = image::open("src_files/ESO_-_Milky_Way.jpg").unwrap().into_rgb();

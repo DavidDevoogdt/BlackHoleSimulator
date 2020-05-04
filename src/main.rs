@@ -8,23 +8,29 @@ pub mod black_body;
 
 
 fn main() {
-    //test_setups::launch_parallel_photons();
-    test_setups::launch_parallel_photons_kerr();
+    
+    //test_setups::launch_parallel_photons_kerr();
 
-    //test_setups::test_coordinate_system();
-    
-    //println!("plotting in curved space!");
-    //test_setups::ray_trace_schwarzshild();
-    
-    //println!("plotting in kerr space!");
-    //test_setups::ray_trace_kerr();
+    //look under generated files for output
 
     //println!("plotting in flat space!");
     //test_setups::ray_trace_minkowski();
-    
-    //test_setups::generate_blackbody(1000.0,10000.0,200);
 
+    //slower and older code
+    //println!("plotting in curved space!");
+    //test_setups::ray_trace_schwarzshild();
+    
+    println!("plotting in kerr space!");
+    test_setups::ray_trace_kerr();
+
+
+    
+    // /old tests
+
+    //test_setups::generate_blackbody(1000.0,10000.0,200);
     //test_setups::photon_orbit();
+    //test_setups::test_coordinate_system();
+    
 }
 
 

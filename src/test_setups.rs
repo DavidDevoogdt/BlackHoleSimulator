@@ -2,7 +2,7 @@ use crate::curved_space;
 use curved_space::Metric;
 use curved_space::SpaceObject;
 
-use crate::python_interface;
+
 use crate::ray_tracer;
 use crate::black_body;
 
@@ -11,23 +11,18 @@ use self::image::{ImageBuffer, RgbImage};
 use std::path::Path;
 
 
-//
+#[allow(non_snake_case)]
 pub fn launch_parallel_photons_kerr(){
-    let M= 1.0;
-    let J = 1.0;
+    //let M= 1.0;
+    let J = 0.8;
     let a = J;
     let r_s: f64 =2.0;
 
-    let direction = [0.0, 1.0, 0.0];
-    let center =[0.0,  0.0, 1.0];
-    let inc_vector    = [0.0, 1.0, 0.0]; 
+    let direction = [1.0, 0.0, 0.0];
+    let center =[-5.0,  0.0, 5.0];
+    let inc_vector = [0.0, 0.0, 0.2];
 
-
-    let center =[-5.0,  1.0, 0.0];
-    let inc_vector = [0.0, 0.0, 0.1];
-
-
-    let accuracy = 1e-5;
+    let accuracy = 1e-7;
 
     let metric = curved_space::new_kerr_metric(J,  accuracy);
    
@@ -66,7 +61,7 @@ pub fn launch_parallel_photons_kerr(){
         direction,
         center ,
         inc_vector,
-        100,
+        20,
         1000,
     );
 
@@ -78,25 +73,24 @@ pub fn launch_parallel_photons_kerr(){
 //////
 /// 
 
-
+#[allow(non_snake_case)]
 pub fn ray_trace_kerr(){
 
-    let M= 1.0;
-    let J = 0.8;
+    //let M= 1.0;
+    let J = 0.7;
     let a = J;
     let r_s: f64 =2.0;
 
-    let accuracy = 1e-6;
+    let accuracy = 1e-7;
 
 
     let metric = curved_space::new_kerr_metric(J,  accuracy);
 
-
     let camera = ray_tracer::Camera{ 
-        pos : [-30.0,0.0,5.0],
-        direction : [1.0,0.0,-5.0/30.0],
-        x_res : 1920/2,
-        y_res : 1080/2,
+        pos : [-30.0,0.001,3.0],
+        direction : [1.0,0.0,-3.0/30.0],
+        x_res : 1920,
+        y_res : 1080,
         distance: 0.07,
         width: 0.16,
         height : 0.09,
@@ -147,20 +141,19 @@ pub fn ray_trace_kerr(){
         camera,
         &col_objects,
         &metric,
-        10000 ,
+        20000 ,
         false,
     );
 
     ray_tracer.run_simulation( accuracy );
 
-    ray_tracer.generate_image("src_files/kerr.bmp");
+    ray_tracer.generate_image("generated_files/kerr.bmp");
 }
 
 
 
 
 //////////////////
-/// 
 
 pub fn ray_trace_schwarzshild(){
 
@@ -232,35 +225,6 @@ pub fn ray_trace_schwarzshild(){
     //     radius: 1.001*r_s,
     //     divisions: 5.0,
     // };
-    
-    // let accretion_disk = ray_tracer::Annulus{
-    //     color1: image::Rgb([255,0,0]),
-    //     color2: image::Rgb([0,0,255]),
-    //     radius1: 3.0*r_s,
-    //     radius2: 7.0*r_s,
-    //     divisions_angular: 10,
-    //     divisions_radial: 5,
-    // };
-    
-    
-    // let image = image::open("src_files/ESO_-_Milky_Way.jpg").unwrap().into_rgb();
-    // //let image = image::open("src/download.jpeg").unwrap().into_rgb();
-    // let (xres,yres) = image.dimensions();
-
-    // let skybox = ray_tracer::Skybox{
-    //     image: image,
-    //     radius: 20.0,
-    //     x_res: xres as i32,
-    //     y_res : yres as i32,
-    //     phi_offset: std::f64::consts::PI,
-    // };
-   
-    // let col_objects : Vec< Box< dyn ray_tracer::CollsionObject> > = vec![
-    //     //Box::new(black_sphere),
-    //     Box::new(colored_sphere),
-    //     Box::new(accretion_disk),
-    //     Box::new(skybox)
-    // ];
    
     let mut ray_tracer = ray_tracer::new( 
         camera,
@@ -274,7 +238,7 @@ pub fn ray_trace_schwarzshild(){
     ray_tracer.run_simulation( 1e1 );
 
     //ray_tracer.plot_paths();
-    ray_tracer.generate_image("src_files/schw800x800.bmp");
+    ray_tracer.generate_image("generated_files/schwarzschild.bmp");
 
     //ray_tracer.plot_paths("xyz");
 
@@ -344,7 +308,7 @@ pub fn ray_trace_minkowski(){
     ray_tracer.run_simulation( 1e-3  );
 
 
-    ray_tracer.generate_image("files/flat800x800.bmp");
+    ray_tracer.generate_image("generated_files/flat.bmp");
 
     //ray_tracer.plot_paths();
 
@@ -371,7 +335,7 @@ pub fn generate_blackbody(temp_min: f64, temp_max:f64, steps: u32) {
         
     }
 
-    let p = Path::new("files/blackbody.bmp");
+    let p = Path::new("generated_files/blackbody.bmp");
 
     img.save_with_format( p,  image::ImageFormat::Bmp).unwrap();
 

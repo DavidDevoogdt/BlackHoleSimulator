@@ -1,4 +1,3 @@
-
 ////////////////////////////////////////////////////////////////////
 // trait definitions
 ////////////////////////////////////////////////////////////////////
@@ -774,7 +773,7 @@ impl<'a> SpaceObject<'a> for MinkowskiObject<'a>{
             Some(x) => {
                 self.error_estimate = x
             },
-            None => panic!("no automatic error estimate for minkowski implemented")
+            None =>  self.error_estimate =0.0,
         }
     }
 

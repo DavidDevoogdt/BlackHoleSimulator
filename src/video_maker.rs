@@ -79,11 +79,11 @@ pub fn make_kerr_video(){
 
     let start = -10.0/180.0*std::f64::consts::PI;
     let stop = 20.0/180.0*std::f64::consts::PI;
-    let step = 0.5/180.0*std::f64::consts::PI;
+    let step = 0.05/180.0*std::f64::consts::PI;
 
     let num = ((stop-start)/step) as i32;
 
-    let base_name = "kerr2";
+    let base_name = "kerr3";
 
     let start_time = Local::now();
 
@@ -119,7 +119,13 @@ pub fn make_kerr_video(){
         let total_duration = (duration/(n+1) * num);
         let finish_time = start_time + total_duration;
 
-        print!("{:.01}%: {} of {}, estimated finish time: {} \n", ((n+1) as f64)/(num as f64)*100.0 ,n,num,finish_time.format("%Y-%m-%d %H:%M:%S")) ;
+        let days = total_duration.num_days();
+        let hours = total_duration.num_hours() - 24*days;
+        let minutes = total_duration.num_minutes()-60*total_duration.num_hours();
+        let seconds = total_duration.num_seconds() - 60*total_duration.num_minutes();
+
+
+        print!("{:.03}%: {} of {}, duration: {} day(s) {:02}:{:02}:{:02}, estimated finish time: {} \n", ((n+1) as f64)/(num as f64)*100.0 ,n+1,num,days,hours,minutes,seconds,finish_time.format("%Y-%m-%d %H:%M:%S")) ;
 
     }
 

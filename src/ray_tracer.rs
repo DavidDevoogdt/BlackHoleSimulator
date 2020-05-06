@@ -372,13 +372,15 @@ impl CollsionObject for Annulus{
 
                 if r >= self.radius1 &&  r <= self.radius2 {  
 
-                    let phi = perc*new[2] + (1.0-perc)*old[2]  +1.0;  
+
+                    let phi = perc*new[2] + (1.0-perc)*old[2] ;
+                    
                    
-                    let rfact  = ((self.divisions_radial as f64) * (r-self.radius1) / ( self.radius2-self.radius1))  as i32;
-                    let p =  ((self.divisions_angular as f64) * phi / ( 2.0*std::f64::consts::PI))  as i32; 
+                    let rfact  = ((self.divisions_radial as f64) * (r-self.radius1) / ( self.radius2-self.radius1)).round()  as i32;
+                    let p =  ((self.divisions_angular as f64) * (( phi) / ( 2.0*std::f64::consts::PI))).round()  as i32; 
 
                     if (p+rfact).rem_euclid(2)==0 {
-                        return  Some( self.color1);
+                       return  Some( self.color1);
                     }
 
                     return  Some( self.color2);
@@ -386,6 +388,7 @@ impl CollsionObject for Annulus{
                 }
             }           
         }
+
         None
     }
 }

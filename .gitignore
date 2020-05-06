@@ -18,6 +18,7 @@ Cargo.lock
 
 /files/*
 /generated_files/*
+/video_files/*
 
 .vscode/launch.json
 .vscode/tasks.json

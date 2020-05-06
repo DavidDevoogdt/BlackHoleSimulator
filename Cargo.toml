@@ -8,3 +8,4 @@ serde = { version = "*", features = ["derive"] }
 image = "0.23.3"
 rayon = "*"
 indicatif = {version = "*", features = ["with_rayon"]}
+chrono = "*"

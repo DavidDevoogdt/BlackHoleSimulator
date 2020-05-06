@@ -20,3 +20,23 @@ pub fn save_to_csv<S: serde::Serialize>(v : &Vec< S >, name : String) -> Result<
     wtr.flush()?;
     Ok(())
 }
+
+
+
+pub fn make_video(n :i32, base_name: &str, frame_rate:i32){
+
+    Command::new( "ffmpeg")
+        .args( &[
+        "-framerate",&format!("{}",frame_rate),
+        "-i", &format!("video_files/{}%04d.bmp",base_name),
+        "-x265-params", "lossless=1", //lossless h265
+        "-frames:v", &format!("{}",n),
+        "-y", //force overwrite
+        &format!("generated_files/output_{}.mkv",base_name),
+        ])
+        .spawn()
+        .expect("failed to execute process");
+
+   
+      
+}

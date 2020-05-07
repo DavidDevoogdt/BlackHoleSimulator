@@ -1,6 +1,7 @@
 extern crate csv;
 
 use std::error::Error;
+use std::fs;
 use std::process::Command;
 
 pub fn launch_python(n: i32, mode: &str) {
@@ -22,6 +23,8 @@ pub fn save_to_csv<S: serde::Serialize>(v: &Vec<S>, name: String) -> Result<(), 
 }
 
 pub fn make_video(n: i32, base_name: &str, frame_rate: i32) {
+    fs::create_dir_all("generated_files").unwrap();
+
     Command::new("ffmpeg")
         .args(&[
             "-framerate",

@@ -16,15 +16,11 @@ Cargo.lock
 
 # End of https://www.gitignore.io/api/rust
 
-/files/*
-/generated_files/*
-/video_files/*
+/files/*.*
+/generated_files/*.*
+/video_files/*.*
 
-.vscode/launch.json
-.vscode/tasks.json
-src_files/calculations.mw
-src_files/picture01.bmp
-src_files/schw800x800 copy.bmp
-src_files/kerr.bmp
-src_files/schw800x800.bmp
+
+.vscode/*
+
 src_files/calculations_MAS.bak

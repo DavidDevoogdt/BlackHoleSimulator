@@ -3,7 +3,9 @@ use crate::python_interface;
 use crate::ray_tracer;
 
 extern crate chrono;
-use self::chrono::{DateTime, Duration, Local};
+use self::chrono::Local;
+
+use std::fs;
 
 extern crate image;
 
@@ -83,6 +85,8 @@ pub fn make_kerr_video() {
 
     let start_time = Local::now();
 
+    fs::create_dir_all("video_files").unwrap();
+
     for n in 0..num {
         let phi = start + (n as f64) * step;
 
@@ -103,7 +107,7 @@ pub fn make_kerr_video() {
         ray_tracer.generate_image(&format!("video_files/{}{:04}.bmp", base_name, n));
 
         let duration = Local::now().signed_duration_since(start_time);
-        let total_duration = (duration / (n + 1) * num);
+        let total_duration = duration / (n + 1) * num;
         let finish_time = start_time + total_duration;
 
         let days = total_duration.num_days();

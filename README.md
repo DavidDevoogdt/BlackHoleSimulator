@@ -1,3 +1,6 @@
+[![](http://img.youtube.com/vi/a6b87AsqNdc/0.jpg)](http://www.youtube.com/watch?v=a6b87AsqNdc "Black Hole vido")
+
+
 # Kerr Black Hole Simulator
 ## installation
 install the rust toolchain. [info here](https://www.rust-lang.org/tools/install)
